@@ -1,0 +1,55 @@
+1
+00:00:03,200 --> 00:00:07,181
+JOHN: Did you hear that? Something moved inside the warehouse.
+
+2
+00:00:07,583 --> 00:00:11,686
+MARY: It's just the wind, John. Let's go home.
+
+3
+00:00:12,088 --> 00:00:14,466
+JOHN: Wind doesn't knock over boxes.
+
+4
+00:00:14,868 --> 00:00:17,747
+Thunder rolled across the empty street.
+
+5
+00:00:18,049 --> 00:00:20,543
+MARY: Fine. But you go first.
+
+6
+00:00:24,100 --> 00:00:26,490
+JOHN: Hello? Is anyone in here?
+
+7
+00:00:29,953 --> 00:00:34,296
+TIM: Please don't be mad! I only came to find my kite.
+
+8
+00:00:34,698 --> 00:00:35,787
+MARY: Your kite?
+
+9
+00:00:36,189 --> 00:00:38,616
+TIM: It flew in through the window yesterday.
+
+10
+00:00:39,519 --> 00:00:42,573
+JOHN: Case closed. The mystery was a kite.
+
+11
+00:00:43,000 --> 00:00:46,617
+The next evening, the kite was back in the sky.
+
+12
+00:00:46,919 --> 00:00:48,931
+TIM: Thank you for helping me!
+
+13
+00:00:49,333 --> 00:00:52,637
+MARY: Next time, call a detective first.
+
+14
+00:00:53,039 --> 00:00:55,123
+JOHN: I charge extra for kites.

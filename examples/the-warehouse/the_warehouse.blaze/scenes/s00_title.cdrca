@@ -1,0 +1,13 @@
+!--- SCENE The Warehouse ---
+
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.ImageProp("../assets/bg_title.png", 0, 0, 9.5, -1) as backdrop
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(0, -0.3, 0.8, "plain") as title
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(0, -1.5, 0.38, "plain") as subtitle
+
+add new action a001 3200 1
+
+def ACTION a001 backdrop modifyMesh ""
+def ACTION a001 title say "The Warehouse"
+def ACTION a001 subtitle say "a very short mystery"
+
+!---END---

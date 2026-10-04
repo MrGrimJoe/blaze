@@ -1,0 +1,4 @@
+pillow>=10.0
+pyyaml>=6.0
+# optional: Windows/macOS system voices when espeak-ng is not installed
+# pyttsx3>=2.90

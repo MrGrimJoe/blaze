@@ -1,0 +1,33 @@
+TITLE: The Warehouse
+SUBTITLE: a very short mystery
+STYLE: bubbles
+CAST: JOHN = man, detective, red coat, glasses
+CAST: MARY = woman, blue dress, long hair
+CAST: TIM = boy, green hoodie, cap
+
+SCENE: rainy street at night
+JOHN: Did you hear that? Something moved inside the warehouse.
+MARY: It's just the wind, John. Let's go home.
+[CAMERA push]
+JOHN: Wind doesn't knock over boxes.
+[WEATHER storm]
+> Thunder rolled across the empty street.
+MARY: Fine. But you go first.
+[MOVE JOHN right]
+
+INT. WAREHOUSE - NIGHT
+JOHN: Hello? Is anyone in here?
+[PAUSE 0.6]
+[ENTER TIM right]
+TIM: Please don't be mad! I only came to find my kite.
+MARY: Your kite?
+TIM: It flew in through the window yesterday.
+[HOP TIM]
+JOHN: Case closed. The mystery was a kite.
+
+SCENE: beach at sunset
+> The next evening, the kite was back in the sky.
+TIM: Thank you for helping me!
+MARY: Next time, call a detective first.
+JOHN: I charge extra for kites.
+[HOP JOHN]

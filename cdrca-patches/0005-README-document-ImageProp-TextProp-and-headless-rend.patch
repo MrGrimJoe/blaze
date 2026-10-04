@@ -1,0 +1,52 @@
+From 5d78a14bb95a620f458a6a8d2afd23c990957b9d Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 06:07:59 +0000
+Subject: [PATCH 5/7] README: document ImageProp, TextProp and headless
+ rendering
+
+---
+ README.md | 28 ++++++++++++++++++++++++++++
+ 1 file changed, 28 insertions(+)
+
+diff --git a/README.md b/README.md
+index d2f01f2..2be0217 100644
+--- a/README.md
++++ b/README.md
+@@ -75,6 +75,34 @@ Actions are defined using the `def action` keyword. You can chain multiple actio
+   def action runFast myCharacter run "fast"
+   ```
+ 
++### Standard props
++
++Props are created with `use <prop>(arguments) as <alias>` and driven by actions (see above). Besides the
++example 3D props, these flat props are available (`ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps`):
++
++- **`ImageProp(src, x, y, height, z, talkSrc)`** - a picture standing at `(x, y)`, `height` scene units tall.
++  `src` is a path/URL relative to the page (or, when rendering with `Back-end/Render/render.js`, relative to the
++  `.cdrca` file). Actions: `modifyMesh ""` (stand), `moveTo X` (walk to X), `talk ""` (flap between `src` and
++  `talkSrc`), `hop 0.5` (jump once).
++- **`TextProp(x, y, size, style)`** - text on a label whose bottom-centre sits at `(x, y)`; style is `"bubble"`
++  (default), `"caption"` or `"plain"`. Actions: `say "some text"` (show it), `modifyMesh ""` (hide it).
++
++An action only drives the props it names, so list every prop that should stay visible in each action. Use a small
++lerp time (e.g. `add new action line1 2200 1`) for cuts instead of the default scene fade.
++
++### Rendering to images or video
++
++```
++npm i playwright && npx playwright install chromium
++node Back-end/Render/render.js examples/demo_animation.cdrca --out frames --fps 24 --video demo.mp4
++```
++
++This runs the unmodified front-end renderer in headless Chromium with a manual clock, so every frame is rendered at
++an exact timestamp. Options: `--width --height --duration --format png|jpeg`. Failures are reported as a JSON line on
++stderr with a non-zero exit code. `--video` needs `ffmpeg`.
++
++Tests: `node tests/transpiler.test.js` and `node tests/render.test.js` (the latter skips if playwright is missing).
++
+ ### Organization
+ 
+ CDRCA uses a header system for organization and imports.
+-- 
+2.43.0
+

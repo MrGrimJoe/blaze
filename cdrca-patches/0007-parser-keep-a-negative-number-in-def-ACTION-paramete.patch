@@ -1,0 +1,54 @@
+From dc8b1eb2846c5c76ea90ba88c19496443932c75a Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 06:11:09 +0000
+Subject: [PATCH 7/7] parser: keep a negative number in def ACTION parameters
+ together
+
+'def ACTION go ball moveTo -2.5' took '-' as the parameter and then read '2.5' as the next part's prop
+name ('Expected prop name in action definition'), or silently passed just '-' to the method. A negative
+number is two tokens (the sign and the number); join them into one parameter. Positive numbers, strings
+and several parts on one line behave as before. Test added.
+---
+ Back-end/Transpiler/Parser.js | 8 +++++++-
+ tests/transpiler.test.js      | 7 +++++++
+ 2 files changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/Back-end/Transpiler/Parser.js b/Back-end/Transpiler/Parser.js
+index 48152fa..43ccbde 100644
+--- a/Back-end/Transpiler/Parser.js
++++ b/Back-end/Transpiler/Parser.js
+@@ -609,8 +609,14 @@ const parserConstructor = function (defaultTokenizer, pluginAPI) {
+         pos++;
+         if (pos >= tokens.length)
+           throw new Error("Expected parameters in action definition");
+-        const prams = tokens[pos].value; // Parameters can be any token
++        let prams = tokens[pos].value; // Parameters can be any token
+         pos++;
++        // a negative number is two tokens ("-" then the number); keep them together as one parameter,
++        // otherwise the number is mistaken for the next part's prop name
++        if ((prams === "-" || prams === "+") && pos < tokens.length && tokens[pos].type === "number") {
++          prams += tokens[pos].value;
++          pos++;
++        }
+         // if (pos >= tokens.length || tokens[pos].type !== "identifier")
+         //   throw new Error("Expected stay time in action definition");
+         // const stayTime = tokens[pos].value;
+diff --git a/tests/transpiler.test.js b/tests/transpiler.test.js
+index 48cbfae..7342f60 100644
+--- a/tests/transpiler.test.js
++++ b/tests/transpiler.test.js
+@@ -41,4 +41,11 @@ test("scene options: documented defaults are emitted when a scene sets none", ()
+   }
+ });
+ 
++test("def ACTION: negative numbers are one parameter (and several parts per line still work)", () => {
++  const P = "ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.";
++  const js = run("!--- SCENE a :: x ---\nuse " + P + "BouncingSphereProp() as ball\nuse " + P + "RotatingCubeProp(0xff0000, 1) as cube\nadd new action go 1000 100\ndef ACTION go ball modifyMesh -1.5 cube modifyMesh 2\n!---END---\n");
++  assert(/propsARR\[0\]\.modifyMesh\(mesh, totalTime, lerpProgress, step, -1\.5\)/.test(js), "ball part should get -1.5");
++  assert(/propsARR\[1\]\.modifyMesh\(mesh, totalTime, lerpProgress, step, 2\)/.test(js), "cube part should get 2");
++});
++
+ console.log("\n" + n + " tests passed");
+-- 
+2.43.0
+

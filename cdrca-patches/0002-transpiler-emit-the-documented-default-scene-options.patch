@@ -1,0 +1,111 @@
+From 06a182206ce00ca1b73b483cd8ef919d2b70e5ff Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 00:53:38 +0000
+Subject: [PATCH 2/7] transpiler: emit the documented default scene options
+ when a scene sets none
+
+stayTimeInit / stayTimeEnd / lerpTime / backgroundColor were only emitted when a header set them, and
+no header keyword sets the three timing options. The renderer then built scenes with undefined times:
+'elapsed >= undefined + undefined' is always false, so it never left the first (intro) scene and no
+action ever played.
+
+Defaults are the values already shown in the sample output at the top of Partial_transpiler.js
+(1000 / 1000 / 500 / 0x000000). Anything a scene sets explicitly still wins.
+
+Adds tests/transpiler.test.js (plain node, no dependencies) covering this and the previous commit;
+the tests fail on the old code.
+
+Not fixed here (separate issue): the documented 'BGcolor = ...' default is dropped by the full
+transpiler - the statement type 'BGCOLOR' is never mapped to the 'backgroundColor' input.
+---
+ Back-end/Transpiler/FullTranspiler.js | 15 +++++++++
+ tests/transpiler.test.js              | 44 +++++++++++++++++++++++++++
+ 2 files changed, 59 insertions(+)
+ create mode 100644 tests/transpiler.test.js
+
+diff --git a/Back-end/Transpiler/FullTranspiler.js b/Back-end/Transpiler/FullTranspiler.js
+index 5d21f23..dade3c8 100644
+--- a/Back-end/Transpiler/FullTranspiler.js
++++ b/Back-end/Transpiler/FullTranspiler.js
+@@ -476,6 +476,14 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
+       ...input,
+     };
+   }
++  // Scene options used when a scene's header does not set them. These are the values shown in the
++  // sample output at the top of Partial_transpiler.js.
++  const DEFAULT_SCENE_OPTIONS = {
++    stayTimeInit: 1000,
++    stayTimeEnd: 1000,
++    lerpTime: 500,
++    backgroundColor: 0x000000,
++  };
+   function transpileScenes(scenes) {
+     let STRscenes = [];
+     scenes = scenes.flat(Infinity);
+@@ -483,6 +491,13 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
+     for (let i = 0; i < scenes.length; i++) {
+       // console.log(scenes[i]);
+       let input = scenes[i];
++      // Without these the renderer gets undefined times (NaN comparisons), never leaves its first
++      // scene, and so never plays any action.
++      for (const key of Object.keys(DEFAULT_SCENE_OPTIONS)) {
++        if (!input[key] || input[key].length === 0) {
++          input[key] = [{ value: `${key}: ${DEFAULT_SCENE_OPTIONS[key]},` }];
++        }
++      }
+       input = chunkInps(input, defaultSceneTemplate);
+       // console.log(input);
+       let str = renderTemplate(defaultSceneTemplate, input);
+diff --git a/tests/transpiler.test.js b/tests/transpiler.test.js
+new file mode 100644
+index 0000000..48cbfae
+--- /dev/null
++++ b/tests/transpiler.test.js
+@@ -0,0 +1,44 @@
++// Plain-node regression tests for the transpiler (no dependencies):  node tests/transpiler.test.js
++const assert = require("assert");
++const fs = require("fs");
++const path = require("path");
++const { transpile } = require("../Back-end/Transpiler/index.js");
++
++const demo = fs.readFileSync(path.join(__dirname, "..", "examples", "demo_animation.cdrca"), "utf8");
++const run = (src) => transpile({ "index.cdrca": src });
++// the body of the LAST `function <name>` (the one that wins in JS)
++const lastFn = (js, name) => {
++  const parts = js.split("function " + name + "(").slice(1);
++  assert(parts.length > 0, "no function " + name);
++  return parts[parts.length - 1].split("\nfunction ")[0].split("var ")[0];
++};
++const guards = (body) => (body.match(/if \(index === (\d+)\)/g) || []).map((m) => m.match(/\d+/)[0]);
++
++let n = 0;
++const test = (name, fn) => { fn(); n++; console.log("ok -", name); };
++
++test("def ACTION: each part only drives the prop it names", () => {
++  const js = run(demo);
++  assert.deepStrictEqual(guards(lastFn(js, "bounce1")), ["0"]);   // ball only
++  assert.deepStrictEqual(guards(lastFn(js, "spin")), ["1"]);      // cube only
++});
++
++test("def ACTION: lines sharing a name combine (demo 'combo' = both props)", () => {
++  assert.deepStrictEqual(guards(lastFn(run(demo), "combo")).sort(), ["0", "1"]);
++});
++
++test("def ACTION: parts do not leak between transpile() calls", () => {
++  run(demo);
++  assert.deepStrictEqual(guards(lastFn(run(demo), "combo")).sort(), ["0", "1"]);
++  const other = run("!--- SCENE a :: x ---\nuse ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.BouncingSphereProp() as ball\nadd new action combo 1000 100\ndef ACTION combo ball modifyMesh \"\"\n!---END---\n");
++  assert.deepStrictEqual(guards(lastFn(other, "combo")), ["0"]);
++});
++
++test("scene options: documented defaults are emitted when a scene sets none", () => {
++  const js = run(demo);
++  for (const [k, v] of [["stayTimeInit", 1000], ["stayTimeEnd", 1000], ["lerpTime", 500], ["backgroundColor", 0]]) {
++    assert(new RegExp(k + ":\\s*" + v + "\\b").test(js), "missing default " + k);
++  }
++});
++
++console.log("\n" + n + " tests passed");
+-- 
+2.43.0
+

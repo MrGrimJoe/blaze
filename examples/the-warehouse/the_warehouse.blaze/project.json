@@ -1,0 +1,203 @@
+{
+ "version": 1,
+ "title": "The Warehouse",
+ "fps": 20,
+ "width": 960,
+ "height": 540,
+ "shots": [
+  {
+   "name": "title",
+   "cdrca": "scenes/s00_title.cdrca",
+   "duration": 3.201,
+   "mood": "day",
+   "title": true,
+   "skip": 1.5,
+   "notes": [],
+   "audio": [],
+   "subs": []
+  },
+  {
+   "name": "s01",
+   "cdrca": "scenes/s01.cdrca",
+   "duration": 20.905,
+   "mood": "night_rain",
+   "title": false,
+   "skip": 1.5,
+   "notes": [
+    "[CAMERA push] skipped: CDRCA has no camera control yet",
+    "[WEATHER storm] skipped: CDRCA has no weather yet",
+    "'rain' is only suggested by the backdrop colours (no animated weather in CDRCA yet)"
+   ],
+   "audio": [
+    [
+     0,
+     "audio/s01_00.wav"
+    ],
+    [
+     4.383,
+     "audio/s01_01.wav"
+    ],
+    [
+     8.888,
+     "audio/s01_03.wav"
+    ],
+    [
+     11.668,
+     "audio/s01_05.wav"
+    ],
+    [
+     14.849,
+     "audio/s01_06.wav"
+    ]
+   ],
+   "subs": [
+    [
+     0,
+     3.981,
+     "John",
+     "Did you hear that? Something moved inside the warehouse."
+    ],
+    [
+     4.383,
+     8.486,
+     "Mary",
+     "It's just the wind, John. Let's go home."
+    ],
+    [
+     8.888,
+     11.266,
+     "John",
+     "Wind doesn't knock over boxes."
+    ],
+    [
+     11.668,
+     14.547,
+     "",
+     "Thunder rolled across the empty street."
+    ],
+    [
+     14.849,
+     17.343,
+     "Mary",
+     "Fine. But you go first."
+    ]
+   ]
+  },
+  {
+   "name": "s02",
+   "cdrca": "scenes/s02.cdrca",
+   "duration": 18.875,
+   "mood": "night",
+   "title": false,
+   "skip": 1.5,
+   "notes": [],
+   "audio": [
+    [
+     0,
+     "audio/s02_00.wav"
+    ],
+    [
+     5.853,
+     "audio/s02_03.wav"
+    ],
+    [
+     10.598,
+     "audio/s02_04.wav"
+    ],
+    [
+     12.089,
+     "audio/s02_05.wav"
+    ],
+    [
+     15.419,
+     "audio/s02_07.wav"
+    ]
+   ],
+   "subs": [
+    [
+     0,
+     2.39,
+     "John",
+     "Hello? Is anyone in here?"
+    ],
+    [
+     5.853,
+     10.196,
+     "Tim",
+     "Please don't be mad! I only came to find my kite."
+    ],
+    [
+     10.598,
+     11.687,
+     "Mary",
+     "Your kite?"
+    ],
+    [
+     12.089,
+     14.516,
+     "Tim",
+     "It flew in through the window yesterday."
+    ],
+    [
+     15.419,
+     18.473,
+     "John",
+     "Case closed. The mystery was a kite."
+    ]
+   ]
+  },
+  {
+   "name": "s03",
+   "cdrca": "scenes/s03.cdrca",
+   "duration": 13.026,
+   "mood": "sunset",
+   "title": false,
+   "skip": 1.5,
+   "notes": [],
+   "audio": [
+    [
+     0,
+     "audio/s03_00.wav"
+    ],
+    [
+     3.919,
+     "audio/s03_01.wav"
+    ],
+    [
+     6.333,
+     "audio/s03_02.wav"
+    ],
+    [
+     10.039,
+     "audio/s03_03.wav"
+    ]
+   ],
+   "subs": [
+    [
+     0,
+     3.617,
+     "",
+     "The next evening, the kite was back in the sky."
+    ],
+    [
+     3.919,
+     5.931,
+     "Tim",
+     "Thank you for helping me!"
+    ],
+    [
+     6.333,
+     9.637,
+     "Mary",
+     "Next time, call a detective first."
+    ],
+    [
+     10.039,
+     12.123,
+     "John",
+     "I charge extra for kites."
+    ]
+   ]
+  }
+ ]
+}

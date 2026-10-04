@@ -1,0 +1,77 @@
+From ea1cd372bcbd36dbf4eddf2ca8695447c69ff200 Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 00:52:42 +0000
+Subject: [PATCH 1/7] transpiler: def ACTION parts only drive their own prop;
+ same-name defs combine
+
+Before, every part of an action ran on EVERY prop's mesh (propsARR[n].method was called inside the
+per-prop map without checking which prop the mesh belongs to), and several 'def ACTION <name> ...'
+lines emitted several 'function <name>' declarations of which only the last survived.
+
+examples/demo_animation.cdrca shows the intent: 'bounce1' moves only the ball, 'spin' only the cube,
+and 'combo' ('Both together') has one def line per prop. With this change each part runs only on the
+mesh of the prop it names, and defs sharing a name are accumulated into one action.
+
+Props an action does not mention are left untouched by that action (unchanged from before).
+---
+ Back-end/Transpiler/Partial_transpiler.js | 19 +++++++++++++++----
+ 1 file changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/Back-end/Transpiler/Partial_transpiler.js b/Back-end/Transpiler/Partial_transpiler.js
+index c7b803c..fd736b9 100644
+--- a/Back-end/Transpiler/Partial_transpiler.js
++++ b/Back-end/Transpiler/Partial_transpiler.js
+@@ -53,6 +53,8 @@ so we just needs to define stuff outside this obj like actions      and just tra
+ const createTranspiler = function (parser, sysPrams, pluginAPI) {
+   var PROPStoIndex_MAP = {};
+   var lastPROPStoIndex_MAP = -1;
++  // parts of every `def ACTION <name> ...` line seen so far, by action name
++  var ACTION_PARTS = {};
+ 
+   function createPROPdef(statment) {
+     let code = `class ${statment.prams.name} extends`;
+@@ -72,9 +74,16 @@ ${statment.prams.code}
+ 
+   function createActionDef(statment) {
+     // console.log(PROPStoIndex_MAP);
++    // Several `def ACTION <same name> ...` lines describe ONE action (see examples/demo_animation.cdrca,
++    // "combo"). Parts accumulate by name; the last function emitted for a name has all of them and,
++    // being declared last, is the one that wins.
++    const actionName = statment.prams.name;
++    if (!ACTION_PARTS[actionName]) ACTION_PARTS[actionName] = [];
++    ACTION_PARTS[actionName].push(...statment.prams.parts);
++    const allParts = ACTION_PARTS[actionName];
+     let partsSTR = "";
+-    for (let i = 0; i < statment.prams.parts.length; i++) {
+-      let part = statment.prams.parts[i];
++    for (let i = 0; i < allParts.length; i++) {
++      let part = allParts[i];
+       // console.log(part.propName);
+       let propIndex = PROPStoIndex_MAP[part.propName];
+       if (propIndex === undefined) {
+@@ -83,11 +92,12 @@ ${statment.prams.code}
+         );
+         propIndex = 0;
+       }
++      // a part only drives the mesh of the prop it names
+       partsSTR += `
+-      propsARR[${propIndex}].${part.methodName}(mesh, totalTime, lerpProgress, step, ${part.prams})
++      if (index === ${propIndex}) propsARR[${propIndex}].${part.methodName}(mesh, totalTime, lerpProgress, step, ${part.prams})
+       `;
+     }
+-    let fn = `function ${statment.prams.name}(propsARR){
++    let fn = `function ${actionName}(propsARR){
+     return propsARR.map((prop, index) => (mesh, totalTime, lerpProgress, step) => {
+       ${partsSTR}
+       return mesh;
+@@ -416,6 +426,7 @@ defaultGredientMap: new THREE.DataTexture(
+     // Reset prop index map for each new transpilation
+     PROPStoIndex_MAP = {};
+     lastPROPStoIndex_MAP = -1;
++    ACTION_PARTS = {};
+ 
+     const stack = [];
+     let codeBlocks = [];
+-- 
+2.43.0
+

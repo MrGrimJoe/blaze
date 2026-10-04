@@ -1,0 +1,235 @@
+From 088ad71dec87177d6e3dc36b3bf5da8bf26c9116 Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 06:07:59 +0000
+Subject: [PATCH 4/7] add Back-end/Render/render.js: headless frame-exact
+ rendering to images / mp4
+
+node Back-end/Render/render.js file.cdrca --out frames/ [--fps --width --height --duration --format --video]
+
+Runs the unmodified Front-end/three.js + Renderer.js in headless Chromium (playwright) with
+requestAnimationFrame replaced by a manual clock, so each frame is rendered at an exact timestamp.
+Files the script refers to resolve relative to the .cdrca file. Errors are JSON on stderr + non-zero exit.
+playwright is only required to run this file; nothing else in the repo depends on it.
+Adds tests/render.test.js (skips if playwright is not installed).
+---
+ Back-end/Render/render.js | 155 ++++++++++++++++++++++++++++++++++++++
+ tests/render.test.js      |  45 +++++++++++
+ 2 files changed, 200 insertions(+)
+ create mode 100644 Back-end/Render/render.js
+ create mode 100644 tests/render.test.js
+
+diff --git a/Back-end/Render/render.js b/Back-end/Render/render.js
+new file mode 100644
+index 0000000..35924cf
+--- /dev/null
++++ b/Back-end/Render/render.js
+@@ -0,0 +1,155 @@
++#!/usr/bin/env node
++/**
++ * Headless, frame-exact renderer: turns a .cdrca file into image frames (and optionally an mp4).
++ *
++ *   node Back-end/Render/render.js <file.cdrca> --out frames/ [--fps 24] [--width 1280] [--height 720]
++ *                                  [--duration <sec>] [--format png|jpeg] [--video out.mp4]
++ *
++ * Needs `npm i playwright` (+ `npx playwright install chromium`) and, for --video, ffmpeg on PATH.
++ *
++ * It runs the unmodified Front-end/three.js and Front-end/Renderer.js in headless Chromium, replacing
++ * requestAnimationFrame with a manual clock so every frame is rendered at an exact timestamp
++ * (deterministic, not real time). Files a script refers to (e.g. ImageProp paths) are resolved
++ * relative to the .cdrca file, exactly as they would be relative to a web page.
++ *
++ * On success prints one JSON line to stdout. On failure prints {"ok":false,"stage":...,"message":...}
++ * to stderr and exits non-zero.
++ */
++const fs = require("fs");
++const path = require("path");
++const { spawnSync } = require("child_process");
++
++const FRONT = path.join(__dirname, "..", "..", "Front-end");
++const ORIGIN = "http://cdrca.local";
++const PAGE = '<!DOCTYPE html><body style="margin:0;background:#000"><canvas id="THRREjsRender"></canvas></body>';
++const MANUAL_CLOCK = `
++  window.__q = [];
++  window.requestAnimationFrame = (cb) => { window.__q.push(cb); return window.__q.length; };
++  window.cancelAnimationFrame = () => {};
++  window.__step = (t) => { const q = window.__q; window.__q = []; q.forEach((cb) => cb(t)); };
++`;
++// total length of the animation as the renderer will play it (intro + actions + end, per scene)
++const LENGTH_SECONDS = `(() => {
++  if (typeof OAS_OBJ === "undefined") return null;
++  let ms = 0;
++  for (const s of OAS_OBJ.scenes) {
++    ms += (s.lerpTime || 0) + (s.stayTimeInit || 0) + (s.stayTimeEnd || 0);
++    for (const a of s.actions || []) ms += (a.lerpTime || 0) + (a.stayTime || 0);
++  }
++  return ms / 1000;
++})()`;
++
++function fail(stage, message, extra) {
++  process.stderr.write(JSON.stringify({ ok: false, stage, message: String(message), ...extra }) + "\n");
++  process.exit(1);
++}
++
++function parseArgs(argv) {
++  const a = { fps: 24, width: 1280, height: 720, out: "frames", format: "png" };
++  const rest = [];
++  for (let i = 0; i < argv.length; i++) {
++    const k = argv[i];
++    if (k === "--out") a.out = argv[++i];
++    else if (k === "--fps") a.fps = Number(argv[++i]);
++    else if (k === "--width") a.width = Number(argv[++i]);
++    else if (k === "--height") a.height = Number(argv[++i]);
++    else if (k === "--duration") a.duration = Number(argv[++i]);
++    else if (k === "--format") a.format = argv[++i];
++    else if (k === "--video") a.video = argv[++i];
++    else rest.push(k);
++  }
++  a.file = rest[0];
++  return a;
++}
++
++// read the .cdrca file plus every .cdrca beside/below it, so @import / @addImport resolve
++function readProject(file) {
++  const dir = path.dirname(file);
++  const vfs = {};
++  (function walk(d, node) {
++    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
++      if (e.name === "node_modules" || e.name.startsWith(".")) continue;
++      if (e.isDirectory()) { node[e.name] = {}; walk(path.join(d, e.name), node[e.name]); }
++      else if (e.name.endsWith(".cdrca")) node[e.name] = fs.readFileSync(path.join(d, e.name), "utf8");
++    }
++  })(dir, vfs);
++  return vfs;
++}
++
++async function main() {
++  const args = parseArgs(process.argv.slice(2));
++  if (!args.file) fail("args", "usage: render.js <file.cdrca> --out frames/");
++  const file = path.resolve(args.file);
++  if (!fs.existsSync(file)) fail("args", "file not found: " + file);
++
++  let js;
++  try {
++    const { transpile } = require("../Transpiler/index.js");
++    js = transpile(readProject(file), {}, [path.basename(file)]);
++    if (typeof js !== "string" || !js.trim()) throw new Error("transpiler returned no code");
++  } catch (e) { fail("transpile", e.message); }
++
++  let chromium;
++  try { ({ chromium } = require("playwright")); }
++  catch (e) { fail("setup", "playwright is not installed: npm i playwright && npx playwright install chromium"); }
++
++  const outDir = path.resolve(args.out);
++  fs.mkdirSync(outDir, { recursive: true });
++  const ext = /^jpe?g$/.test(args.format) ? "jpg" : "png";
++
++  // the page's URL mirrors the script's folder, so "../assets/x.png" means what it would on disk
++  const dirUrl = ORIGIN + "/fs/" + path.dirname(file).replace(/\\/g, "/").replace(/^\//, "");
++  const browser = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
++  try {
++    // the renderer sizes its canvas to innerWidth/2 x innerHeight/2
++    const page = await browser.newPage({ viewport: { width: args.width * 2, height: args.height * 2 } });
++    const errors = [];
++    page.on("pageerror", (e) => errors.push(String(e)));
++    page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
++    await page.route(ORIGIN + "/**", (route) => {
++      const u = new URL(route.request().url());
++      if (u.pathname.endsWith("/index.html")) return route.fulfill({ contentType: "text/html", body: PAGE });
++      const p = decodeURIComponent(u.pathname).replace(/^\/fs\//, "");
++      const abs = path.resolve(process.platform === "win32" ? p : "/" + p);
++      if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return route.fulfill({ path: abs });
++      return route.fulfill({ status: 404, body: "not found" });
++    });
++    await page.addInitScript(MANUAL_CLOCK);
++    await page.goto(dirUrl + "/index.html");
++    await page.addScriptTag({ path: path.join(FRONT, "three.js") });
++    await page.addScriptTag({ path: path.join(FRONT, "Renderer.js") });
++    await page.addScriptTag({ content: "let currentANIM = null;" }); // the global the editor UI defines
++    try { await page.addScriptTag({ content: js }); } catch (e) { fail("run", e.message, { errors }); }
++    // wait for images the script uses (ImageProp) so no frame is rendered half-loaded
++    await page.evaluate(async () => {
++      const P = ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps;
++      if (P.ImageProp && P.ImageProp.ready) await P.ImageProp.ready();
++    });
++    if (errors.length) fail("run", errors[0], { errors });
++
++    const seconds = args.duration ?? (await page.evaluate(LENGTH_SECONDS)) ?? 5;
++    const frames = Math.max(1, Math.round(seconds * args.fps));
++    for (let i = 0; i < frames; i++) {
++      // step and read the canvas in one task, before the drawing buffer is cleared
++      const url = await page.evaluate(([t, mime]) => {
++        window.__step(t);
++        return document.getElementById("THRREjsRender").toDataURL(mime, 0.92);
++      }, [1000 + (i * 1000) / args.fps, ext === "jpg" ? "image/jpeg" : "image/png"]);
++      fs.writeFileSync(path.join(outDir, String(i).padStart(6, "0") + "." + ext), Buffer.from(url.split(",")[1], "base64"));
++      if (errors.length) fail("render", errors[0], { errors, frame: i });
++    }
++
++    let video = null;
++    if (args.video) {
++      const r = spawnSync("ffmpeg", ["-y", "-framerate", String(args.fps), "-i", path.join(outDir, "%06d." + ext),
++        "-pix_fmt", "yuv420p", path.resolve(args.video)], { encoding: "utf8" });
++      if (r.status !== 0) fail("encode", (r.stderr || "ffmpeg failed").slice(-400));
++      video = path.resolve(args.video);
++    }
++    process.stdout.write(JSON.stringify({ ok: true, frames, fps: args.fps, seconds, dir: outDir, video }) + "\n");
++  } finally {
++    await browser.close();
++  }
++}
++
++main().catch((e) => fail("crash", e.stack || e.message));
+diff --git a/tests/render.test.js b/tests/render.test.js
+new file mode 100644
+index 0000000..b857aa8
+--- /dev/null
++++ b/tests/render.test.js
+@@ -0,0 +1,45 @@
++// End-to-end smoke test for Back-end/Render/render.js (ImageProp, TextProp, actions). Skips if playwright is missing.
++//   node tests/render.test.js
++const assert = require("assert");
++const fs = require("fs");
++const os = require("os");
++const path = require("path");
++const { spawnSync } = require("child_process");
++
++try { require.resolve("playwright"); } catch (e) { console.log("skip - playwright not installed"); process.exit(0); }
++
++// 8x16 solid PNG, base64 (kept tiny so the test needs no assets)
++const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAIAAACk6KkqAAAAE0lEQVR4nGM4YWODFTGMSgyEBABO46ABoIbkdAAAAABJRU5ErkJggg==", "base64");
++const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdrca-render-"));
++fs.mkdirSync(path.join(dir, "assets"));
++fs.writeFileSync(path.join(dir, "assets", "a.png"), PNG);
++const P = "ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.";
++fs.writeFileSync(path.join(dir, "main.cdrca"), `!--- SCENE T :: test ---
++use ${P}ImageProp("assets/a.png", -3, 0, 2, 0, "assets/a.png") as hero
++use ${P}TextProp(0, 1, 0.4, "bubble") as label
++add new action one 800 1
++add new action two 800 1
++def ACTION one hero modifyMesh ""
++def ACTION one label say "hello there"
++def ACTION two hero moveTo 3
++def ACTION two label modifyMesh ""
++!---END---
++`);
++const out = path.join(dir, "frames");
++const r = spawnSync(process.execPath, [path.join(__dirname, "..", "Back-end", "Render", "render.js"), path.join(dir, "main.cdrca"),
++  "--out", out, "--fps", "10", "--width", "160", "--height", "90", "--format", "png"], { encoding: "utf8" });
++assert.strictEqual(r.status, 0, r.stderr);
++const info = JSON.parse(r.stdout.trim());
++const files = fs.readdirSync(out).sort();
++assert.strictEqual(files.length, info.frames);
++assert(info.frames >= 20, "expected the whole animation (intro + 2 actions + end), got " + info.frames + " frames");
++const md5 = (f) => require("crypto").createHash("md5").update(fs.readFileSync(path.join(out, f))).digest("hex");
++assert(new Set(files.map(md5)).size > 5, "frames should change over time (walk + text)");
++console.log("ok - renders ImageProp/TextProp/actions to " + info.frames + " distinct frames");
++
++const bad = path.join(dir, "bad.cdrca");
++fs.writeFileSync(bad, "use Nope.Nothing() as x\n");
++const rb = spawnSync(process.execPath, [path.join(__dirname, "..", "Back-end", "Render", "render.js"), bad, "--out", path.join(dir, "f2")], { encoding: "utf8" });
++assert.notStrictEqual(rb.status, 0);
++assert(/"ok":false/.test(rb.stderr), "failures are reported as JSON on stderr");
++console.log("ok - a broken script fails with a JSON error");
+-- 
+2.43.0
+

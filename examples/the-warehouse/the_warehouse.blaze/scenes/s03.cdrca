@@ -1,0 +1,103 @@
+!--- SCENE beach at sunset ---
+
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.ImageProp("../assets/bg_beach_sunset.png", 0, 0, 9.4, -1) as backdrop
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.ImageProp("../assets/tim.png", -4.2, -0.628, 3.344, 0, "../assets/tim_talk.png") as c_Tim
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.ImageProp("../assets/mary.png", 0, -0.1, 4.4, 0, "../assets/mary_talk.png") as c_Mary
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.ImageProp("../assets/john.png", 4.2, -0.1, 4.4, 0, "../assets/john_talk.png") as c_John
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(-4, 1.244, 0.32, "bubble") as say_Tim_1
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(0, 2.3, 0.32, "bubble") as say_Mary_2
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(4, 2.3, 0.32, "bubble") as say_John_3
+use ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.TextProp(0, -3.5, 0.3, "caption") as caption
+
+add new action a001 3617 1
+add new action a002 300 1
+add new action a003 2012 1
+add new action a004 400 1
+add new action a005 3304 1
+add new action a006 400 1
+add new action a007 2084 1
+add new action a008 400 1
+add new action a009 500 1
+
+def ACTION a001 backdrop modifyMesh ""
+def ACTION a001 c_Tim modifyMesh ""
+def ACTION a001 c_Mary modifyMesh ""
+def ACTION a001 c_John modifyMesh ""
+def ACTION a001 say_Tim_1 modifyMesh ""
+def ACTION a001 say_Mary_2 modifyMesh ""
+def ACTION a001 say_John_3 modifyMesh ""
+def ACTION a001 caption say "The next evening, the kite was back in the sky."
+
+def ACTION a002 backdrop modifyMesh ""
+def ACTION a002 c_Tim modifyMesh ""
+def ACTION a002 c_Mary modifyMesh ""
+def ACTION a002 c_John modifyMesh ""
+def ACTION a002 say_Tim_1 modifyMesh ""
+def ACTION a002 say_Mary_2 modifyMesh ""
+def ACTION a002 say_John_3 modifyMesh ""
+def ACTION a002 caption modifyMesh ""
+
+def ACTION a003 backdrop modifyMesh ""
+def ACTION a003 c_Tim talk ""
+def ACTION a003 c_Mary modifyMesh ""
+def ACTION a003 c_John modifyMesh ""
+def ACTION a003 say_Tim_1 say "Thank you for helping me!"
+def ACTION a003 say_Mary_2 modifyMesh ""
+def ACTION a003 say_John_3 modifyMesh ""
+def ACTION a003 caption modifyMesh ""
+
+def ACTION a004 backdrop modifyMesh ""
+def ACTION a004 c_Tim modifyMesh ""
+def ACTION a004 c_Mary modifyMesh ""
+def ACTION a004 c_John modifyMesh ""
+def ACTION a004 say_Tim_1 modifyMesh ""
+def ACTION a004 say_Mary_2 modifyMesh ""
+def ACTION a004 say_John_3 modifyMesh ""
+def ACTION a004 caption modifyMesh ""
+
+def ACTION a005 backdrop modifyMesh ""
+def ACTION a005 c_Tim modifyMesh ""
+def ACTION a005 c_Mary talk ""
+def ACTION a005 c_John modifyMesh ""
+def ACTION a005 say_Tim_1 modifyMesh ""
+def ACTION a005 say_Mary_2 say "Next time, call a detective first."
+def ACTION a005 say_John_3 modifyMesh ""
+def ACTION a005 caption modifyMesh ""
+
+def ACTION a006 backdrop modifyMesh ""
+def ACTION a006 c_Tim modifyMesh ""
+def ACTION a006 c_Mary modifyMesh ""
+def ACTION a006 c_John modifyMesh ""
+def ACTION a006 say_Tim_1 modifyMesh ""
+def ACTION a006 say_Mary_2 modifyMesh ""
+def ACTION a006 say_John_3 modifyMesh ""
+def ACTION a006 caption modifyMesh ""
+
+def ACTION a007 backdrop modifyMesh ""
+def ACTION a007 c_Tim modifyMesh ""
+def ACTION a007 c_Mary modifyMesh ""
+def ACTION a007 c_John talk ""
+def ACTION a007 say_Tim_1 modifyMesh ""
+def ACTION a007 say_Mary_2 modifyMesh ""
+def ACTION a007 say_John_3 say "I charge extra for kites."
+def ACTION a007 caption modifyMesh ""
+
+def ACTION a008 backdrop modifyMesh ""
+def ACTION a008 c_Tim modifyMesh ""
+def ACTION a008 c_Mary modifyMesh ""
+def ACTION a008 c_John modifyMesh ""
+def ACTION a008 say_Tim_1 modifyMesh ""
+def ACTION a008 say_Mary_2 modifyMesh ""
+def ACTION a008 say_John_3 modifyMesh ""
+def ACTION a008 caption modifyMesh ""
+
+def ACTION a009 backdrop modifyMesh ""
+def ACTION a009 c_Tim modifyMesh ""
+def ACTION a009 c_Mary modifyMesh ""
+def ACTION a009 c_John hop 0.5
+def ACTION a009 say_Tim_1 modifyMesh ""
+def ACTION a009 say_Mary_2 modifyMesh ""
+def ACTION a009 say_John_3 modifyMesh ""
+def ACTION a009 caption modifyMesh ""
+
+!---END---

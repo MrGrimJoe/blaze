@@ -1,0 +1,64 @@
+From 6947841173200d8e865f49bdbf71a59fe3926544 Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Fri, 2 Oct 2026 06:09:19 +0000
+Subject: [PATCH 6/7] render.js: add --from <sec> to skip the start of the
+ animation
+
+The clock still runs through the skipped part (so a walk in progress is in the right place); only frames
+after it are written, numbered from 0. Useful to drop the default intro/outro scene (1.5s / 1s).
+---
+ Back-end/Render/render.js | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/Back-end/Render/render.js b/Back-end/Render/render.js
+index 35924cf..64107b6 100644
+--- a/Back-end/Render/render.js
++++ b/Back-end/Render/render.js
+@@ -3,7 +3,7 @@
+  * Headless, frame-exact renderer: turns a .cdrca file into image frames (and optionally an mp4).
+  *
+  *   node Back-end/Render/render.js <file.cdrca> --out frames/ [--fps 24] [--width 1280] [--height 720]
+- *                                  [--duration <sec>] [--format png|jpeg] [--video out.mp4]
++ *                                  [--duration <sec>] [--from <sec>] [--format png|jpeg] [--video out.mp4]
+  *
+  * Needs `npm i playwright` (+ `npx playwright install chromium`) and, for --video, ffmpeg on PATH.
+  *
+@@ -54,6 +54,7 @@ function parseArgs(argv) {
+     else if (k === "--width") a.width = Number(argv[++i]);
+     else if (k === "--height") a.height = Number(argv[++i]);
+     else if (k === "--duration") a.duration = Number(argv[++i]);
++    else if (k === "--from") a.from = Number(argv[++i]);
+     else if (k === "--format") a.format = argv[++i];
+     else if (k === "--video") a.video = argv[++i];
+     else rest.push(k);
+@@ -127,15 +128,23 @@ async function main() {
+     });
+     if (errors.length) fail("run", errors[0], { errors });
+ 
+-    const seconds = args.duration ?? (await page.evaluate(LENGTH_SECONDS)) ?? 5;
++    // --from skips the first seconds of the animation (the clock still runs through them, so state
++    // such as a walk in progress is correct); only frames after it are written, numbered from 0.
++    const skip = Math.round((args.from || 0) * args.fps);
++    const seconds = args.duration ?? ((await page.evaluate(LENGTH_SECONDS)) ?? 5) - (args.from || 0);
+     const frames = Math.max(1, Math.round(seconds * args.fps));
+-    for (let i = 0; i < frames; i++) {
++    for (let i = 0; i < skip + frames; i++) {
++      const t = 1000 + (i * 1000) / args.fps;
++      if (i < skip) {
++        await page.evaluate((t) => window.__step(t), t);
++        continue;
++      }
+       // step and read the canvas in one task, before the drawing buffer is cleared
+       const url = await page.evaluate(([t, mime]) => {
+         window.__step(t);
+         return document.getElementById("THRREjsRender").toDataURL(mime, 0.92);
+-      }, [1000 + (i * 1000) / args.fps, ext === "jpg" ? "image/jpeg" : "image/png"]);
+-      fs.writeFileSync(path.join(outDir, String(i).padStart(6, "0") + "." + ext), Buffer.from(url.split(",")[1], "base64"));
++      }, [t, ext === "jpg" ? "image/jpeg" : "image/png"]);
++      fs.writeFileSync(path.join(outDir, String(i - skip).padStart(6, "0") + "." + ext), Buffer.from(url.split(",")[1], "base64"));
+       if (errors.length) fail("render", errors[0], { errors, frame: i });
+     }
+ 
+-- 
+2.43.0
+
