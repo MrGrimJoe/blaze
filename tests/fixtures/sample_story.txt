@@ -1,31 +1,31 @@
 TITLE: The Warehouse
 SUBTITLE: a very short mystery
-STYLE: bubbles
-CAST: JOHN = man, detective, red coat, glasses
-CAST: MARY = woman, blue dress, long hair
-CAST: TIM = boy, green hoodie, cap
+CAST: JOHN gender=m coat=1 hat=fedora glasses=1 top=0xd64036
+CAST: MARY gender=f hairstyle=long top=0x3c78d6 dress=1
+CAST: TIM gender=m child=1 top=0x40a060 hat=cap
 
-SCENE: rainy street at night
+SCENE: street
+BACKDROP: gen:street:night_rain
 JOHN: Did you hear that? Something moved inside the warehouse.
 MARY: It's just the wind, John. Let's go home.
-[CAMERA push]
 JOHN: Wind doesn't knock over boxes.
-[WEATHER storm]
 > Thunder rolled across the empty street.
 MARY: Fine. But you go first.
-[MOVE JOHN right]
+[MOVE JOHN 4.5]
 
-INT. WAREHOUSE - NIGHT
+SCENE: inside
+BACKDROP: gen:warehouse:night
 JOHN: Hello? Is anyone in here?
 [PAUSE 0.6]
-[ENTER TIM right]
+[ENTER TIM 9.5 4.2]
 TIM: Please don't be mad! I only came to find my kite.
 MARY: Your kite?
 TIM: It flew in through the window yesterday.
 [HOP TIM]
 JOHN: Case closed. The mystery was a kite.
 
-SCENE: beach at sunset
+SCENE: beach
+BACKDROP: gen:beach:sunset
 > The next evening, the kite was back in the sky.
 TIM: Thank you for helping me!
 MARY: Next time, call a detective first.

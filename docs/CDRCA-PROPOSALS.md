@@ -13,6 +13,10 @@ designed the CDRCA way by whoever owns the language, if at all.
    (`as ball` works).
 3. **`lerpTime` of 0 on an action** divides by zero in the renderer's lerp progress (use 1 to get a hard cut).
 4. `Front-end/index.html` loads `./parser.js`, which is not in the repository.
+5. **`!` followed later by a repeat of the next character, outside a header block, is read as a header start**, so JS such as
+   `!this.walk` at the top level of a `def PROP` breaks. Workaround: keep code inside `!--- ... ---` blocks.
+6. **`def ACTION` takes exactly one token as parameter** (no multiple arguments, arrays or objects). Possibly by design; asking.
+7. (fixed in patch 11, listed for the owner) header blocks that only define things used to become empty scenes.
 
 ## Features Blaze would use
 
@@ -22,7 +26,7 @@ Ordered by how much they would help, most first. For each: what it is for, not h
    fixed at z=5. Blaze would use it for push-ins, pans and shake.
 2. **Choosing the length of the default first and last scene.** Every script gets 1.5 s of intro (500 ms fade + 1000 ms
    stay) and 1 s of outro that cannot be set from the language. Blaze skips them when rendering.
-3. **Per-action control of the scene fade** (or "cut" as a first-class transition). The renderer fades every mesh in over
+3. **Per-action control of the scene fade** (every scene also fades in from black over ~0.3 s: its first frame is black) (or "cut" as a first-class transition). The renderer fades every mesh in over
    `lerpTime` at the start of every action; Blaze uses `lerpTime 1` to get cuts.
 4. **Props that stay visible when an action does not name them**, as an opt-in. Today a prop an action does not mention is
    hidden (ImageProp/TextProp) or drawn at its defaults, so scripts must list every prop in every action.

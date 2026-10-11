@@ -1,4 +1,30 @@
+# Python and Node caches
 __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
+node_modules/
+.coverage
+htmlcov/
+
+# what Blaze makes when it runs
+*.blaze/
+frames/
+*.mp4
+/blaze-videos/
+/studio/storage/
+
+# keys and local settings must never be committed
+.env*
+
+# installer and screenshot build output (anchored: tools/screens/ and installer/assets/ are source and must be tracked)
+/installer/build/
+/installer/dl/
+/installer/npm-tmp/
+/dist/
+/screens/
+/smoke-results.json
+
+# notes for the next working session: never publish
+/handoff/
+/HANDOFF*.md

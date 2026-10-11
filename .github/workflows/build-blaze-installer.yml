@@ -1,0 +1,232 @@
+# Builds the Blaze Windows installer, then proves it works: installs it, runs the installed app end to end, photographs every
+# wizard page and the installed app's page, uninstalls it. Nothing is built or installed by hand.
+#
+# Get the installer: Actions -> "Build Blaze Installer" -> latest run -> Artifacts -> blaze-installer
+# (tick "publish_release" when running it by hand, or push a v* tag, to attach it to a GitHub Release).
+name: Build Blaze Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Attach the installer to a GitHub Release"
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      publish_release:
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]          # a version tag builds, checks and publishes a release; main is covered by screenshots.yml, which calls this
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Read the version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path blaze/__init__.py -Pattern '__version__\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+          Write-Host "Blaze $v"
+
+      - name: Stage the app and everything it needs (Python, Node, ffmpeg, headless Chromium)
+        run: python installer/stage.py --download
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Compile the installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" installer\blaze.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+          Get-ChildItem dist | Format-Table Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blaze-installer
+          path: dist/Blaze_Setup_*.exe
+          retention-days: 30
+
+  verify:
+    name: Install it and use it
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: blaze-installer
+          path: dist
+
+      - name: Install silently (no admin rights, per user)
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist -Filter "Blaze_Setup_*.exe").FullName
+          $dir = Join-Path $env:RUNNER_TEMP "BlazeInstalled"
+          "BLAZE_DIR=$dir" >> $env:GITHUB_ENV
+          $p = Start-Process -FilePath $setup -ArgumentList @("/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"","/LOG=`"$env:RUNNER_TEMP\setup.log`"") -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\setup.log" -Tail 40; throw "Installer exit code $($p.ExitCode)" }
+          Get-ChildItem $dir | Format-Table Name
+
+      - name: Everything is where it should be
+        shell: pwsh
+        run: |
+          $d = $env:BLAZE_DIR
+          $must = @("runtime\python\pythonw.exe","runtime\python\python.exe","runtime\node\node.exe","runtime\ffmpeg\ffmpeg.exe","runtime\ffmpeg\SOURCE.txt",
+                    "app\blaze_app.pyw","app\studio_app.pyw","app\studio\main.py","app\studio\src\ui\main_window.py","app\blaze\launcher.py","app\cdrca\Back-end\Render\render.js","app\cdrca\node_modules\playwright\package.json",
+                    "app\cdrca-lib\atoms.cdrca","app\examples\the-warehouse.txt","app\studio\config.yaml","LICENSE.txt","THIRD-PARTY-NOTICES.md","blaze.ico","unins000.exe")
+          $missing = $must | Where-Object { -not (Test-Path (Join-Path $d $_)) }
+          if ($missing) { $missing | ForEach-Object { Write-Host "MISSING: $_" }; throw "files missing from the install" }
+          if (-not (Get-ChildItem (Join-Path $d "runtime\browsers") -Directory | Where-Object Name -like "chromium*")) { throw "no browser was installed" }
+          $lnk = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Blaze.lnk"
+          if (-not (Test-Path $lnk)) { throw "no Start menu shortcut at $lnk" }
+          if (-not (Test-Path (Join-Path $env:USERPROFILE "Videos\Blaze"))) { throw "the Videos\Blaze folder was not created" }
+          if (Select-String -Path (Join-Path $d "app\studio\config.yaml") -Pattern 'api_key:\s*"[^"]+"') { throw "the shipped config contains an API key" }
+          Write-Host "all files present; shortcut and user folders created; shipped config has no key"
+
+      - name: The bundled Python can import everything the app uses
+        shell: pwsh
+        run: |
+          $py = Join-Path $env:BLAZE_DIR "runtime\python\python.exe"
+          & $py -c "import PIL, yaml, anthropic, openai; from google import genai; print('imports ok:', PIL.__version__, yaml.__version__)"
+          if ($LASTEXITCODE -ne 0) { throw "an import failed in the bundled Python" }
+          & $py -c "from PyQt6 import QtWidgets; import pydantic, requests; print('studio imports ok: PyQt6', QtWidgets.QT_VERSION_STR if hasattr(QtWidgets, 'QT_VERSION_STR') else '')"
+          if ($LASTEXITCODE -ne 0) { throw "a Blaze Studio import failed in the bundled Python" }
+          & $py -c "import pyttsx3; e = pyttsx3.init(); print('pyttsx3 ok, voices:', len(e.getProperty('voices') or []))"
+          if ($LASTEXITCODE -ne 0) { Write-Host "::warning::pyttsx3 could not start on this runner (the app still works; videos are silent without a voice engine)" }
+
+      - name: Blaze Studio from the install (open the window, run the offline demo through it)
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          $d = $env:BLAZE_DIR
+          & "$d\runtime\python\python.exe" "$d\app\studio_app.pyw" --selftest
+          if ($LASTEXITCODE -ne 0) { throw "the studio self-test failed" }
+
+      - name: Use the installed app end to end (start like the shortcut, make a video, close)
+        shell: pwsh
+        run: |
+          $d = $env:BLAZE_DIR
+          python installer/smoke_installed.py --python "$d\runtime\python\pythonw.exe" --script "$d\app\blaze_app.pyw" --quality fast --out smoke-results.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: installed-app-checks
+          path: smoke-results.json
+          if-no-files-found: ignore
+
+      - name: Photograph the installed app's page (real Chrome)
+        if: always()
+        shell: pwsh
+        run: |
+          $d = $env:BLAZE_DIR
+          $env:BLAZE_CONFIG = ""
+          $p = Start-Process -FilePath "$d\runtime\python\pythonw.exe" -ArgumentList "`"$d\app\blaze_app.pyw`"" -PassThru
+          $base = $null
+          for ($i = 0; $i -lt 90 -and -not $base; $i++) {
+            foreach ($port in 8765..8780) {
+              try { $r = Invoke-RestMethod "http://127.0.0.1:$port/api/status" -TimeoutSec 2; if ($r.PSObject.Properties.Name -contains "sample") { $base = "http://127.0.0.1:$port"; break } } catch {}
+            }
+            if (-not $base) { Start-Sleep -Seconds 1 }
+          }
+          if (-not $base) { throw "the installed app did not start" }
+          mkdir shoot | Out-Null
+          Push-Location shoot
+          npm init -y | Out-Null
+          npm install --no-audit --no-fund playwright | Out-Null
+          Pop-Location
+          $env:NODE_PATH = (Resolve-Path shoot\node_modules).Path
+          $env:BASE_URL = $base
+          $env:OUT = "screens\installed-page"
+          $env:CHANNEL = "chrome"
+          node tools/screens/ui_screens.js
+          $code = $LASTEXITCODE
+          try { Invoke-RestMethod "$base/api/bye" -Method Post -Body "{}" | Out-Null } catch {}
+          exit $code
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-installed-page
+          path: screens/installed-page
+
+      - name: Uninstall, and check your own files are kept
+        if: always()
+        shell: pwsh
+        run: |
+          Get-Process pythonw -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          $d = $env:BLAZE_DIR
+          $un = Join-Path $d "unins000.exe"
+          if (-not (Test-Path $un)) { throw "no uninstaller" }
+          $p = Start-Process -FilePath $un -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Test-Path (Join-Path $d "runtime")) { throw "the program files were not removed" }
+          if (-not (Test-Path (Join-Path $env:USERPROFILE "Videos\Blaze"))) { throw "the uninstaller removed the person's Videos\Blaze folder" }
+          Write-Host "uninstalled; program files gone; Videos\Blaze kept"
+
+  installer-screens:
+    name: Photograph the installer's wizard
+    needs: build
+    runs-on: windows-latest
+    continue-on-error: true       # best effort: it needs a desktop session; the other checks do not depend on it
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: blaze-installer
+          path: dist
+      - name: Run the real installer, page by page
+        shell: pwsh
+        run: |
+          $setup = (Get-ChildItem dist -Filter "Blaze_Setup_*.exe").FullName
+          ./installer/screenshot_installer.ps1 -Setup $setup -OutDir screens\installer -InstallDir "$env:RUNNER_TEMP\BlazeShots"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-installer
+          path: screens/installer
+
+  release:
+    needs: [build, verify]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: blaze-installer
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Blaze_Setup_*.exe
+          draft: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          name: Blaze ${{ needs.build.outputs.version }}
+          generate_release_notes: true

@@ -229,6 +229,9 @@ var create_Tokenizer = function () {
     let tokens = [];
     let STRindex = 0;
     let LOGs = [];
+    // whitespace is skipped, but a token remembers that some came right before it (spaceBefore) so code
+    // captured from a { ... } body (def PROP, JS) can be put back together without gluing words together
+    const spaceBefore = (i) => i > 0 && (str[i - 1] === " " || str[i - 1] === "\t" || str[i - 1] === "\r");
 
     while (STRindex < str.length) {
       Utilities.log(
@@ -281,6 +284,7 @@ var create_Tokenizer = function () {
           continue;
         } else {
           const token = { type: bestMatch.type, value: bestMatch.value };
+          if (spaceBefore(STRindex)) token.spaceBefore = true;
           tokens.push(token);
           Utilities.log(`Token created: ${JSON.stringify(token)}`, "info");
           STRindex += bestMatch.length;
@@ -291,6 +295,7 @@ var create_Tokenizer = function () {
       // If no match, treat as unknown
       let chunk = str[STRindex];
       const unknownToken = { type: "unknown", value: chunk };
+      if (spaceBefore(STRindex)) unknownToken.spaceBefore = true;
       tokens.push(unknownToken);
       const warning = "Unrecognized character: " + chunk;
       LOGs.push({ warn: warning });
@@ -388,54 +393,46 @@ let OAS_TOKobj = {
 function cleanTheTokens(tokens) {
   let cleanedTokens = [];
   let currentValue = "";
+  let currentSpace = false; // did whitespace come right before the first character of currentValue
 
   function determineType(token) {
     return token.type;
   }
 
+  // push the characters gathered so far as one token (typed like the token that ended them, as before)
+  function flush(endedBy) {
+    if (currentValue !== "") {
+      const merged = { type: determineType(endedBy), value: currentValue };
+      if (currentSpace) merged.spaceBefore = true;
+      cleanedTokens.push(merged);
+      currentValue = "";
+      currentSpace = false;
+    }
+  }
+
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
     if (token.value === " ") {
-      if (currentValue !== "") {
-        cleanedTokens.push({
-          type: determineType(token),
-          value: currentValue,
-        });
-        currentValue = "";
-      }
+      flush(token);
       continue;
     } else if (token.value.length > 1) {
-      if (currentValue !== "") {
-        cleanedTokens.push({
-          type: determineType(token),
-          value: currentValue,
-        });
-        currentValue = "";
-      }
+      flush(token);
       cleanedTokens.push(token);
     } else if (
       token.value.length === 1 &&
       /[a-zA-Z0-9_"'`]/.test(token.value)
     ) {
+      // characters separated by whitespace are separate words (they used to be glued together)
+      if (token.spaceBefore) flush(token);
+      if (currentValue === "") currentSpace = Boolean(token.spaceBefore);
       currentValue += token.value;
     } else {
-      if (currentValue !== "") {
-        cleanedTokens.push({
-          type: determineType(token),
-          value: currentValue,
-        });
-        currentValue = "";
-      }
+      flush(token);
       cleanedTokens.push(token);
     }
   }
 
-  if (currentValue !== "") {
-    cleanedTokens.push({
-      type: determineType(tokens[tokens.length - 1]),
-      value: currentValue,
-    });
-  }
+  flush(tokens[tokens.length - 1]);
 
   return cleanedTokens;
 }

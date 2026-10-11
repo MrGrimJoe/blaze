@@ -1,0 +1,57 @@
+From 1a46a19b6eefc10750ac07fdfc4931d9ae9e92be Mon Sep 17 00:00:00 2001
+From: MrMIB <MrGrimJoe@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 22:41:59 +0000
+Subject: [PATCH 11/11] transpiler: a header block that only defines things is
+ not a scene
+
+A '!--- ... ---' block holding only def PROP / def ACTION / JS (a library such as atoms.cdrca)
+became a scene with the default intro + end and nothing in it, so every script that imported
+a library began with seconds of black. A block that uses no prop, runs no action and sets no
+scene option is now skipped. Test: tests/transpiler.test.js.
+---
+ Back-end/Transpiler/FullTranspiler.js | 10 ++++++++++
+ tests/transpiler.test.js              |  9 +++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/Back-end/Transpiler/FullTranspiler.js b/Back-end/Transpiler/FullTranspiler.js
+index 85db9f2..9accf8a 100644
+--- a/Back-end/Transpiler/FullTranspiler.js
++++ b/Back-end/Transpiler/FullTranspiler.js
+@@ -493,6 +493,16 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
+     for (let i = 0; i < scenes.length; i++) {
+       // console.log(scenes[i]);
+       let input = scenes[i];
++      // A header block that only defines things (def PROP / def ACTION / JS) and uses no prop, runs no
++      // action and sets no scene option is not a scene: it would play as an empty scene (intro + end).
++      const isEmpty = (key) => !input[key] || input[key].length === 0;
++      if (
++        isEmpty("prop_use") &&
++        isEmpty("action_use") &&
++        Object.keys(DEFAULT_SCENE_OPTIONS).every(isEmpty)
++      ) {
++        continue;
++      }
+       // Without these the renderer gets undefined times (NaN comparisons), never leaves its first
+       // scene, and so never plays any action.
+       for (const key of Object.keys(DEFAULT_SCENE_OPTIONS)) {
+diff --git a/tests/transpiler.test.js b/tests/transpiler.test.js
+index 9c75237..66038f6 100644
+--- a/tests/transpiler.test.js
++++ b/tests/transpiler.test.js
+@@ -69,4 +69,13 @@ test("def PROP / JS bodies keep the spaces between words (they were glued togeth
+   new Function("class Prop{}; const mixClasses=(c)=>c[0];" + js.replace(/ObjectAnimationSystem_INS\.CORE_3d_PROPSsceneSYS\.Prop/g, "Prop")); // parses as JavaScript
+ });
+ 
++test("a header block that only defines things is not a scene (no empty scene is played)", () => {
++  const lib = "!--- PROP Dot :: a prop ---\ndef PROP Dot {\n  constructor() { super(); }\n}\n!---END---\n";
++  const scenes = (js) => (js.match(/PropsDef:/g) || []).length;
++  const withUse = "!--- SCENE s1 ---\nuse Dot() as dot1\nadd new action go 1000 100\ndef ACTION go dot1 modifyMesh \"\"\n!---END---\n";
++  assert.strictEqual(scenes(run(lib)), 0, "define-only block must not become a scene");
++  assert.strictEqual(scenes(run(lib + withUse)), 1, "only the block that uses a prop is a scene");
++  assert.strictEqual(scenes(run(withUse)), 1, "a scene that uses a prop is still a scene");
++});
++
+ console.log("\n" + n + " tests passed");
+-- 
+2.43.0
+

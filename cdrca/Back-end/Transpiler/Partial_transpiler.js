@@ -233,7 +233,7 @@ ${statment.prams.code}
         return ADD_ImportEmbeding(statement, options);
         break;
       case "JS_BLOCK":
-        return { value: `(()=>{${statement.prams.code}})()`, type: "JS_BLOCK" };
+        return { value: `(()=>{${statement.prams.code}})();`, type: "JS_BLOCK" };
         break;
       case "PROP_DEF":
         return {

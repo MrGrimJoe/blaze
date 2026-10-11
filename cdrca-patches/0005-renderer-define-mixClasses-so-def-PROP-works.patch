@@ -1,0 +1,53 @@
+From ab91defd2d0a40c8a264f96b4f3d030c4bdd6ebc Mon Sep 17 00:00:00 2001
+From: MrMIB <MrGrimJoe@users.noreply.github.com>
+Date: Sat, 3 Oct 2026 19:04:19 +0000
+Subject: [PATCH 05/11] renderer: define mixClasses so 'def PROP' works
+
+'def PROP Name [abstracts A B] { ... }' is transpiled to 'class Name extends mixClasses([Prop, A, B]) { ... }'
+but mixClasses was not defined anywhere, so any script using def PROP failed with 'mixClasses is not defined'.
+
+Implemented as described in the comment next to its use in Partial_transpiler.js: one class extending the
+given classes in order (first = root, each later class layered on top; its methods/getters/statics replace
+earlier ones). A single class is returned unchanged, which is the case for a plain 'def PROP X { }'.
+
+Open question for the language's owner: how a later class's constructor/field initialisation should combine
+(only methods and statics are carried over today).
+---
+ Front-end/Renderer.js | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/Front-end/Renderer.js b/Front-end/Renderer.js
+index 4beabd1..1d2634e 100644
+--- a/Front-end/Renderer.js
++++ b/Front-end/Renderer.js
+@@ -537,4 +537,27 @@ let ObjectAnimationSystem = function () {
+ 
+   // PSA_SYS(PSA).init(60, false);
+ };
++// `def PROP Name [abstracts A B] { ... }` is transpiled to `class Name extends mixClasses([Prop, A, B]) { ... }`
++// (see createPropDef in Partial_transpiler.js), but nothing defined mixClasses, so every `def PROP` failed at runtime.
++// It returns one class that extends the given classes in order, N+M extends ... N+1 extends N, where N is the first
++// item: the first class is the root, and each later class is layered on top of what came before it (its methods,
++// getters and static members replace earlier ones of the same name). With a single class that class is returned as is.
++function mixClasses(classes) {
++  return classes.reduce((Base, Next) => {
++    if (Base === Next) return Base;
++    const Mixed = class extends Base {};
++    for (const key of Reflect.ownKeys(Next.prototype)) {
++      if (key !== "constructor") {
++        Object.defineProperty(Mixed.prototype, key, Object.getOwnPropertyDescriptor(Next.prototype, key));
++      }
++    }
++    for (const key of Reflect.ownKeys(Next)) {
++      if (key !== "length" && key !== "name" && key !== "prototype") {
++        Object.defineProperty(Mixed, key, Object.getOwnPropertyDescriptor(Next, key));
++      }
++    }
++    return Mixed;
++  });
++}
++
+ let ObjectAnimationSystem_INS = ObjectAnimationSystem();
+-- 
+2.43.0
+

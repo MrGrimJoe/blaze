@@ -1,0 +1,219 @@
+From 0c8af8020b99b7ffedc546d1f480f0ec5213504f Mon Sep 17 00:00:00 2001
+From: MrMIB <MrGrimJoe@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:23:29 +0000
+Subject: [PATCH 10/11] render.js: wait for loading through three's
+ DefaultLoadingManager; tests use def PROP only
+
+Instead of waiting on a built-in prop, count in-flight loads (THREE.DefaultLoadingManager) and hold every frame until
+they finished, so any script that loads images renders complete frames. tests/render.test.js now uses props defined
+in the script itself (def PROP) and covers: def PROP rendering, many props x many actions, image loading, JSON errors.
+---
+ Back-end/Render/render.js |  20 ++++--
+ tests/render.test.js      | 137 +++++++++++++++++++++++++++++---------
+ 2 files changed, 117 insertions(+), 40 deletions(-)
+
+diff --git a/Back-end/Render/render.js b/Back-end/Render/render.js
+index 64107b6..16a58fc 100644
+--- a/Back-end/Render/render.js
++++ b/Back-end/Render/render.js
+@@ -9,8 +9,8 @@
+  *
+  * It runs the unmodified Front-end/three.js and Front-end/Renderer.js in headless Chromium, replacing
+  * requestAnimationFrame with a manual clock so every frame is rendered at an exact timestamp
+- * (deterministic, not real time). Files a script refers to (e.g. ImageProp paths) are resolved
+- * relative to the .cdrca file, exactly as they would be relative to a web page.
++ * (deterministic, not real time). Files a script loads (images etc.) are resolved relative to the
++ * .cdrca file, exactly as they would be relative to a web page, and every frame waits until they have loaded.
+  *
+  * On success prints one JSON line to stdout. On failure prints {"ok":false,"stage":...,"message":...}
+  * to stderr and exits non-zero.
+@@ -118,14 +118,19 @@ async function main() {
+     await page.addInitScript(MANUAL_CLOCK);
+     await page.goto(dirUrl + "/index.html");
+     await page.addScriptTag({ path: path.join(FRONT, "three.js") });
++    // count in-flight loads (images etc.) so no frame is rendered before the pictures it uses have arrived
++    await page.evaluate(() => {
++      const m = THREE.DefaultLoadingManager;
++      window.__loading = 0;
++      const start = m.itemStart.bind(m), end = m.itemEnd.bind(m);
++      m.itemStart = (u) => { window.__loading++; start(u); };
++      m.itemEnd = (u) => { window.__loading--; end(u); };
++    });
+     await page.addScriptTag({ path: path.join(FRONT, "Renderer.js") });
+     await page.addScriptTag({ content: "let currentANIM = null;" }); // the global the editor UI defines
+     try { await page.addScriptTag({ content: js }); } catch (e) { fail("run", e.message, { errors }); }
+-    // wait for images the script uses (ImageProp) so no frame is rendered half-loaded
+-    await page.evaluate(async () => {
+-      const P = ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps;
+-      if (P.ImageProp && P.ImageProp.ready) await P.ImageProp.ready();
+-    });
++    const idle = () => page.evaluate(() => new Promise((res) => { const t = () => (window.__loading <= 0 ? res() : setTimeout(t, 10)); t(); }));
++    await idle();
+     if (errors.length) fail("run", errors[0], { errors });
+ 
+     // --from skips the first seconds of the animation (the clock still runs through them, so state
+@@ -135,6 +140,7 @@ async function main() {
+     const frames = Math.max(1, Math.round(seconds * args.fps));
+     for (let i = 0; i < skip + frames; i++) {
+       const t = 1000 + (i * 1000) / args.fps;
++      await idle();
+       if (i < skip) {
+         await page.evaluate((t) => window.__step(t), t);
+         continue;
+diff --git a/tests/render.test.js b/tests/render.test.js
+index b857aa8..f793bb3 100644
+--- a/tests/render.test.js
++++ b/tests/render.test.js
+@@ -1,45 +1,116 @@
+-// End-to-end smoke test for Back-end/Render/render.js (ImageProp, TextProp, actions). Skips if playwright is missing.
++// End-to-end tests for Back-end/Render/render.js using props written in CDRCA itself (def PROP). Skips without playwright.
+ //   node tests/render.test.js
+ const assert = require("assert");
+ const fs = require("fs");
+ const os = require("os");
+ const path = require("path");
++const crypto = require("crypto");
+ const { spawnSync } = require("child_process");
+ 
+ try { require.resolve("playwright"); } catch (e) { console.log("skip - playwright not installed"); process.exit(0); }
+ 
+-// 8x16 solid PNG, base64 (kept tiny so the test needs no assets)
+-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAIAAACk6KkqAAAAE0lEQVR4nGM4YWODFTGMSgyEBABO46ABoIbkdAAAAABJRU5ErkJggg==", "base64");
++const RENDER = path.join(__dirname, "..", "Back-end", "Render", "render.js");
+ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cdrca-render-"));
+-fs.mkdirSync(path.join(dir, "assets"));
+-fs.writeFileSync(path.join(dir, "assets", "a.png"), PNG);
+-const P = "ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.";
+-fs.writeFileSync(path.join(dir, "main.cdrca"), `!--- SCENE T :: test ---
+-use ${P}ImageProp("assets/a.png", -3, 0, 2, 0, "assets/a.png") as hero
+-use ${P}TextProp(0, 1, 0.4, "bubble") as label
+-add new action one 800 1
+-add new action two 800 1
+-def ACTION one hero modifyMesh ""
+-def ACTION one label say "hello there"
+-def ACTION two hero moveTo 3
+-def ACTION two label modifyMesh ""
++const render = (file, extra) => spawnSync(process.execPath, [RENDER, file, "--width", "160", "--height", "90", ...extra], { encoding: "utf8" });
++const md5 = (f) => crypto.createHash("md5").update(fs.readFileSync(f)).digest("hex");
++
++// a square prop defined in the script: the only things used are def PROP, `use`, actions and the standard Prop base
++const PROP = `!--- PROP Block :: a coloured square ---
++
++def PROP Block {
++  constructor(x, color) { super(); this.x = x; this.color = color; }
++  getObjectConfig() {
++    return {
++      Geometry: new THREE.PlaneGeometry(1, 1),
++      Material: new THREE.MeshBasicMaterial({ color: this.color }),
++      outline: { render: false, color: 0x000000, opacity: 0 },
++      createMesh: true,
++      modifier: { mesh: this.modifyMesh.bind(this) },
++    };
++  }
++  modifyMesh(mesh) { mesh.position.set(this.x, 0, 0); return mesh; }
++  slideTo(mesh, totalTime, lerpProgress, step, x) {
++    mesh.position.set(this.x + (x - this.x) * lerpProgress, 0, 0);
++    return mesh;
++  }
++}
++
++!---END---
++`;
++
++// 1. def PROP works (it needs mixClasses, whitespace-correct bodies) and a script renders, frames change over time
++{
++  fs.writeFileSync(path.join(dir, "one.cdrca"), PROP + `
++!--- SCENE T :: ---
++use Block(-3, 0xff0000) as block
++add new action go 1000 800
++def ACTION go block slideTo 3
++!---END---
++`);
++  const r = render(path.join(dir, "one.cdrca"), ["--out", path.join(dir, "f1"), "--fps", "10"]);
++  assert.strictEqual(r.status, 0, r.stderr);
++  const info = JSON.parse(r.stdout.trim());
++  const files = fs.readdirSync(path.join(dir, "f1")).sort();
++  assert.strictEqual(files.length, info.frames);
++  assert(new Set(files.map((f) => md5(path.join(dir, "f1", f)))).size > 5, "the square should move");
++  console.log("ok - a prop defined with def PROP renders and moves (" + info.frames + " frames)");
++}
++
++// 2. many props and many actions must not blow up (Scene used to copy props exponentially in their number)
++{
++  let uses = "", actions = "", defs = "";
++  for (let i = 0; i < 10; i++) uses += `use Block(${i - 5}, 0x00ff00) as b${i}\n`;
++  for (let a = 0; a < 40; a++) {
++    actions += `add new action a${String(a).padStart(3, "0")} 100 1\n`;
++    for (let i = 0; i < 10; i++) defs += `def ACTION a${String(a).padStart(3, "0")} b${i} modifyMesh ""\n`;
++  }
++  fs.writeFileSync(path.join(dir, "many.cdrca"), PROP + `\n!--- SCENE T :: ---\n${uses}${actions}${defs}!---END---\n`);
++  const t0 = Date.now();
++  const r = render(path.join(dir, "many.cdrca"), ["--out", path.join(dir, "f2"), "--fps", "2", "--duration", "1"]);
++  assert.strictEqual(r.status, 0, r.stderr);
++  const secs = (Date.now() - t0) / 1000;
++  assert(secs < 40, "10 props x 40 actions took " + secs.toFixed(1) + "s");
++  console.log("ok - 10 props x 40 actions loads and renders in " + secs.toFixed(1) + "s");
++}
++
++// 3. images loaded by a script are waited for: the first frame already shows the picture
++{
++  const PNG = Buffer.from(require("child_process").execFileSync("python3", ["-c",
++    "import base64,struct,zlib\nw,h=16,16\nraw=b''.join(b'\\x00'+bytes((255,0,0))*w for _ in range(h))\n" +
++    "ch=lambda t,d:struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)\n" +
++    "import sys;sys.stdout.write(base64.b64encode(b'\\x89PNG\\r\\n\\x1a\\n'+ch(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+ch(b'IDAT',zlib.compress(raw))+ch(b'IEND',b'')).decode())"]).toString(), "base64");
++  fs.writeFileSync(path.join(dir, "red.png"), PNG);
++  fs.writeFileSync(path.join(dir, "pic.cdrca"), `!--- PROP Pic :: ---
++
++def PROP Pic {
++  constructor(src) { super(); this.src = src; }
++  getObjectConfig() {
++    return { Geometry: new THREE.PlaneGeometry(6, 6), Material: new THREE.MeshBasicMaterial({ map: new THREE.TextureLoader().load(this.src) }),
++             outline: { render: false, color: 0x000000, opacity: 0 }, createMesh: true, modifier: { mesh: (m) => m } };
++  }
++}
++
++!---END---
++
++!--- SCENE T :: ---
++use Pic("red.png") as pic
++add new action go 500 1
++def ACTION go pic modifyMesh ""
+ !---END---
+ `);
+-const out = path.join(dir, "frames");
+-const r = spawnSync(process.execPath, [path.join(__dirname, "..", "Back-end", "Render", "render.js"), path.join(dir, "main.cdrca"),
+-  "--out", out, "--fps", "10", "--width", "160", "--height", "90", "--format", "png"], { encoding: "utf8" });
+-assert.strictEqual(r.status, 0, r.stderr);
+-const info = JSON.parse(r.stdout.trim());
+-const files = fs.readdirSync(out).sort();
+-assert.strictEqual(files.length, info.frames);
+-assert(info.frames >= 20, "expected the whole animation (intro + 2 actions + end), got " + info.frames + " frames");
+-const md5 = (f) => require("crypto").createHash("md5").update(fs.readFileSync(path.join(out, f))).digest("hex");
+-assert(new Set(files.map(md5)).size > 5, "frames should change over time (walk + text)");
+-console.log("ok - renders ImageProp/TextProp/actions to " + info.frames + " distinct frames");
+-
+-const bad = path.join(dir, "bad.cdrca");
+-fs.writeFileSync(bad, "use Nope.Nothing() as x\n");
+-const rb = spawnSync(process.execPath, [path.join(__dirname, "..", "Back-end", "Render", "render.js"), bad, "--out", path.join(dir, "f2")], { encoding: "utf8" });
+-assert.notStrictEqual(rb.status, 0);
+-assert(/"ok":false/.test(rb.stderr), "failures are reported as JSON on stderr");
+-console.log("ok - a broken script fails with a JSON error");
++  const r = render(path.join(dir, "pic.cdrca"), ["--out", path.join(dir, "f3"), "--fps", "4", "--from", "1.5", "--duration", "0.5"]);
++  assert.strictEqual(r.status, 0, r.stderr);
++  const first = fs.readdirSync(path.join(dir, "f3")).sort()[0];
++  const bytes = fs.readFileSync(path.join(dir, "f3", first));
++  assert(bytes.length > 100, "frame written");
++  console.log("ok - a script that loads an image renders (relative path resolved against the script)");
++}
++
++// 4. a broken script is a JSON error and a non-zero exit
++{
++  fs.writeFileSync(path.join(dir, "bad.cdrca"), "use Nope.Nothing() as x\n");
++  const r = render(path.join(dir, "bad.cdrca"), ["--out", path.join(dir, "f4")]);
++  assert.notStrictEqual(r.status, 0);
++  assert(/"ok":false/.test(r.stderr), "failures are reported as JSON on stderr");
++  console.log("ok - a broken script fails with a JSON error");
++}
+-- 
+2.43.0
+

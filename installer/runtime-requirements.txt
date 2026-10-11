@@ -1,0 +1,10 @@
+# Installed into the Windows installer's own Python (runtime/python). Binary wheels only; nothing is built on the user's PC.
+pillow>=10.0
+pyyaml>=6.0
+pyttsx3>=2.90          # Windows system voices (SAPI): voices work without installing anything else
+anthropic>=0.40        # the AI writer's providers; you choose one on the page, none is a default
+openai>=1.50
+google-genai>=1.0
+PyQt6>=6.7          # Blaze Studio's window (GPL v3: see THIRD-PARTY-NOTICES.md)
+pydantic>=2.7       # the studio's world state
+requests>=2.32

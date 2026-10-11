@@ -9,8 +9,8 @@
  *
  * It runs the unmodified Front-end/three.js and Front-end/Renderer.js in headless Chromium, replacing
  * requestAnimationFrame with a manual clock so every frame is rendered at an exact timestamp
- * (deterministic, not real time). Files a script refers to (e.g. ImageProp paths) are resolved
- * relative to the .cdrca file, exactly as they would be relative to a web page.
+ * (deterministic, not real time). Files a script loads (images etc.) are resolved relative to the
+ * .cdrca file, exactly as they would be relative to a web page, and every frame waits until they have loaded.
  *
  * On success prints one JSON line to stdout. On failure prints {"ok":false,"stage":...,"message":...}
  * to stderr and exits non-zero.
@@ -118,14 +118,19 @@ async function main() {
     await page.addInitScript(MANUAL_CLOCK);
     await page.goto(dirUrl + "/index.html");
     await page.addScriptTag({ path: path.join(FRONT, "three.js") });
+    // count in-flight loads (images etc.) so no frame is rendered before the pictures it uses have arrived
+    await page.evaluate(() => {
+      const m = THREE.DefaultLoadingManager;
+      window.__loading = 0;
+      const start = m.itemStart.bind(m), end = m.itemEnd.bind(m);
+      m.itemStart = (u) => { window.__loading++; start(u); };
+      m.itemEnd = (u) => { window.__loading--; end(u); };
+    });
     await page.addScriptTag({ path: path.join(FRONT, "Renderer.js") });
     await page.addScriptTag({ content: "let currentANIM = null;" }); // the global the editor UI defines
     try { await page.addScriptTag({ content: js }); } catch (e) { fail("run", e.message, { errors }); }
-    // wait for images the script uses (ImageProp) so no frame is rendered half-loaded
-    await page.evaluate(async () => {
-      const P = ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps;
-      if (P.ImageProp && P.ImageProp.ready) await P.ImageProp.ready();
-    });
+    const idle = () => page.evaluate(() => new Promise((res) => { const t = () => (window.__loading <= 0 ? res() : setTimeout(t, 10)); t(); }));
+    await idle();
     if (errors.length) fail("run", errors[0], { errors });
 
     // --from skips the first seconds of the animation (the clock still runs through them, so state
@@ -135,6 +140,7 @@ async function main() {
     const frames = Math.max(1, Math.round(seconds * args.fps));
     for (let i = 0; i < skip + frames; i++) {
       const t = 1000 + (i * 1000) / args.fps;
+      await idle();
       if (i < skip) {
         await page.evaluate((t) => window.__step(t), t);
         continue;

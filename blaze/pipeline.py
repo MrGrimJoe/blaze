@@ -40,7 +40,6 @@ class Options:
     fps: int = 24
     voice: str = "auto"            # auto | espeak | pyttsx3 | off
     wpm: int = 150                 # speaking speed (slower = better for learners; ~110)
-    style: Optional[str] = None    # bubbles | subtitles | both (overrides STYLE:)
     workers: int = field(default_factory=lambda: max(1, min(4, os.cpu_count() or 2)))
     keep_frames: bool = False
     node: str = "node"
@@ -73,7 +72,6 @@ def check_tools(opts: Options) -> None:
 # --------------------------------------------------------------------------- build the project
 def create_project(text: str, project: Path, opts: Options, base_dir: Optional[Path] = None) -> Tuple[Screenplay, dict]:
     sp = parse(text)
-    if opts.style: sp.style = opts.style
     log = opts.progress
     for d in ("assets", "audio", "scenes"):
         (project / d).mkdir(parents=True, exist_ok=True)
@@ -85,14 +83,18 @@ def create_project(text: str, project: Path, opts: Options, base_dir: Optional[P
     apps: Dict[str, art.Appearance] = {}
     for c in chars:
         desc = sp.cast.get(c, "")
-        m = re.search(r"asset:\s*([\w .\-]+)", desc, re.I)
-        hint = m.group(1).strip() if m else c
-        look = re.sub(r"asset:\s*[\w .\-]+,?", "", desc, flags=re.I).strip(" ,")
+        pairs = art.parse_pairs(desc) if desc.strip() else {}
+        m = pairs.get("asset")
+        hint = m if m else c
+        look = " ".join(f"{k}={v}" for k, v in pairs.items() if k != "asset")
         found = lib.character(hint)
         if m and found is None:
             raise BlazeError(f"CAST: {c} asks for asset '{hint}' but there is no library/characters/{hint}.png "
                              f"(looked in: {', '.join(str(r) for r in lib.roots)}). Add it with: blaze asset add <file> --name {hint}", "assets")
-        apps[c] = art.appearance_for(c, look)           # gender / child still come from the description (voice, scale)
+        try:
+            apps[c] = art.appearance_for(c, look)       # exact key=value pairs; gender / child also pick the voice and size
+        except ValueError as e:
+            raise BlazeError(f"CAST {c}: {e}", "screenplay")
         if found is not None:
             log(f"  {c}: using library asset {found.name}")
             for suffix in ("", "_talk", "_blink"):
@@ -123,34 +125,40 @@ def create_project(text: str, project: Path, opts: Options, base_dir: Optional[P
 
     backdrops: Dict[str, Path] = {}
     shots: List[compiler.Shot] = []
-    first_mood = art.mood_from(sp.scenes[0].heading if sp.scenes else "")
-    if sp.title:
-        shots.append(compiler.compile_title(0, sp, project / "scenes", first_mood))
     notes: List[str] = []
-    for si, sc in enumerate(sp.scenes, 1):
-        place, mood = art.place_from(sc.heading), art.mood_from(sc.heading)
-        if sc.backdrop:
-            src = lib.backdrop(sc.backdrop, base_dir)
-            if src is None:
-                raise BlazeError(f"BACKDROP: '{sc.backdrop}' was not found (looked for library/backdrops/{art.slug(sc.backdrop)}.png "
-                                 f"and a file by that path). Add it with: blaze asset add <file> --as backdrop --name {sc.backdrop}", "assets")
-            key = "custom_" + art.slug(sc.backdrop)
-            if key not in backdrops:
-                dst = project / "assets" / f"bg_{key}.png"
-                from PIL import Image as _I
-                im = _I.open(src).convert("RGB")
-                tw, th = 1920, 1080
-                k = max(tw / im.width, th / im.height)
-                im = im.resize((max(tw, round(im.width * k)), max(th, round(im.height * k))))
-                l, t = (im.width - tw) // 2, (im.height - th) // 2
-                im.crop((l, t, l + tw, t + th)).save(dst)
-                backdrops[key] = dst
+
+    def backdrop_for(spec: str) -> Path:
+        """gen:<place>:<mood> is generated; anything else is a library backdrop name or an image path."""
+        spec = spec or "gen:street:day"
+        if spec in backdrops:
+            return backdrops[spec]
+        if spec.startswith("gen:"):
+            try:
+                place, mood = art.parse_generator(spec)
+            except ValueError as e:
+                raise BlazeError(f"BACKDROP: {e}", "screenplay")
+            dst = art.make_backdrop(place, mood, project / "assets" / f"bg_{place}_{mood.name}.png")
         else:
-            key = f"{place}_{mood.name}"
-            if key not in backdrops:
-                backdrops[key] = art.make_backdrop(place, mood, project / "assets" / f"bg_{key}.png")
+            src = lib.backdrop(spec, base_dir)
+            if src is None:
+                raise BlazeError(f"BACKDROP: '{spec}' was not found (looked for library/backdrops/{art.slug(spec)}.png and a file by that path). "
+                                 f"Add it with: blaze asset add <file> --as backdrop --name {spec}", "assets")
+            dst = project / "assets" / f"bg_custom_{art.slug(spec)}.png"
+            from PIL import Image as _I
+            im = _I.open(src).convert("RGB")
+            tw, th = 1920, 1080
+            k = max(tw / im.width, th / im.height)
+            im = im.resize((max(tw, round(im.width * k)), max(th, round(im.height * k))))
+            l, t = (im.width - tw) // 2, (im.height - th) // 2
+            im.crop((l, t, l + tw, t + th)).save(dst)
+        backdrops[spec] = dst
+        return dst
+
+    if sp.title:
+        shots.append(compiler.compile_title(0, sp, project / "scenes", (4, 6, 18), (2, 3, 8)))
+    for si, sc in enumerate(sp.scenes, 1):
         li = {bj: v for (s, bj), v in info.items() if s == si}
-        shots.append(compiler.compile_scene(si, sc, sp, apps, project, li, backdrops[key], opts.wpm, opts.width / opts.height))
+        shots.append(compiler.compile_scene(si, sc, sp, apps, project, li, backdrop_for(sc.backdrop), opts.wpm, opts.width / opts.height))
 
     for s_ in shots:
         notes += [f"{s_.name}: {n}" for n in s_.notes]

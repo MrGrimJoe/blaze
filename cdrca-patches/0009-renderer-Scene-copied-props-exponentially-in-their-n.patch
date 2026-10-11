@@ -1,0 +1,44 @@
+From b8f7ea447fc932f3666d96719321c4c5d904282f Mon Sep 17 00:00:00 2001
+From: MrMIB <MrGrimJoe@users.noreply.github.com>
+Date: Mon, 5 Oct 2026 09:23:29 +0000
+Subject: [PATCH 09/11] renderer: Scene copied props exponentially in their
+ number
+
+Scene gives every prop a copy of all props (knownProps). The copies were made inside the loop that assigns them, so
+the copy handed to each prop also contained the copies already assigned to the props before it: the work doubled
+with every prop. A script with 6 props and 70 actions needed 2 s to load; 8 props and 110 actions made the page
+run out of memory and crash.
+
+Take all copies from the same state first (after clearing the previous scene's copy, which would otherwise nest one
+level deeper every scene), then assign them. The same 8 props / 110 actions now load in ~0.2 s.
+---
+ Front-end/Renderer.js | 12 +++++++++---
+ 1 file changed, 9 insertions(+), 3 deletions(-)
+
+diff --git a/Front-end/Renderer.js b/Front-end/Renderer.js
+index 1d2634e..a9fc05d 100644
+--- a/Front-end/Renderer.js
++++ b/Front-end/Renderer.js
+@@ -381,10 +381,16 @@ let ObjectAnimationSystem = function () {
+             )
+           ] = prop;
+         }
+-        for (let prop of props) {
++        // Every prop gets a copy of all the props (its knownProps). The copies used to be made one prop at a time, assigning
++        // as it went, so each copy also contained the copies already handed to earlier props: the work doubled with every
++        // prop (exponential in the number of props: 6 props and 70 actions took 2 s, 8 props and 110 actions never finished).
++        // Take every copy from the same untouched state first, then assign them.
++        for (let prop of props) prop.knownProps = {};
++        const copies = props.map(() => deepClone(knownProps));
++        props.forEach((prop, i) => {
+           // prop.knownProps = structuredClone(knownProps);
+-          prop.knownProps = deepClone(knownProps);
+-        }
++          prop.knownProps = copies[i];
++        });
+         this.props = props;
+       }
+       getConfig() {
+-- 
+2.43.0
+

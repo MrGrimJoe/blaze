@@ -1,0 +1,80 @@
+# AI Production Studio — Configuration
+#
+# There is no default AI provider. On first run the app opens a setup window where you
+# pick a provider and paste your own API key; it writes the choices below for you.
+# You can also fill this file in by hand. Three independent slots, each with its own provider:
+#   text / vision:  anthropic | gemini | openai   (advanced: huggingface | ollama | dummy)
+#   image:          gemini | openai               (advanced: diffusers | dummy)
+#   Anthropic has no image-generation API, so images need gemini or openai.
+# Never commit this file with real keys in it.
+
+# ── Choices (empty = not chosen yet) ──
+text_provider: ""
+vision_provider: ""
+image_provider: ""
+
+# ── Anthropic ──
+anthropic_api_key: ""
+anthropic_model: claude-sonnet-4-5
+
+# ── Gemini ──
+gemini_api_key: ""
+gemini_model: gemini-flash-latest
+gemini_image_model: gemini-3.1-flash-image
+
+# ── OpenAI ──
+openai_api_key: ""
+openai_model: gpt-5.5
+openai_image_model: gpt-image-1
+
+# Model names change over time; check your provider's own model list if a call reports "model not found".
+
+# ── Optional: a separate key for the vision or image slot ──
+# Each slot reuses the provider's main key above when its own is blank.
+vision_anthropic_api_key: ""
+vision_gemini_api_key: ""
+vision_openai_api_key: ""
+image_api_key: ""              # image slot with gemini
+image_openai_api_key: ""       # image slot with openai
+
+# ── Local models (advanced) ──
+hf_repo_id: ""                 # text/vision via HuggingFace, e.g. "meta-llama/Llama-3.1-8B-Instruct"
+# Only needed for gated/private repos. If blank and a gated repo is selected, the app prompts for
+# a token at the point it is actually needed (see hf_common.py).
+hf_token: ""
+ollama_model: llama3
+ollama_url: http://localhost:11434
+hf_image_repo_id: ""           # used if image_provider: diffusers, e.g. "stabilityai/sdxl-turbo"
+hf_device: auto                # auto | cpu | cuda
+hf_max_new_tokens: 1024
+
+# ── External tools ──
+# NOTE: key is godot_binary_path (not godot_path) — this must match what
+# GodotRenderer reads (src/integrations/godot/renderer.py), or your
+# configured binary is silently ignored in favor of the ./bin/godot default.
+godot_binary_path: ./bin/godot
+blender_path: blender
+# Bare "ffmpeg" resolves via PATH if you already have it installed
+# (VideoAssembler looks it up with shutil.which); set a full path here if it is not on PATH.
+ffmpeg_path: ffmpeg
+
+# ── Storage ──
+storage_path: ./storage
+
+# ── Pipeline settings ──
+max_repair_attempts: 3
+render_timeout_seconds: 300
+render_fps: 24
+render_width: 1152
+render_height: 648
+# ValidatorManager/RepairEngine ARE implemented (Phase 3, Aug 2026). Set
+# this to false to enable real validation + auto-repair; true skips
+# straight to "rendered" status, which is faster/cheaper for quick tests
+# or if you don't have a vision-capable model configured.
+skip_validation: true
+
+# ── Render backend (Blaze) ──
+# godot: original pipeline.   cdrca: compose .cdrca scenes and render them with the bundled CDRCA engine
+# (needs Node.js + `python blaze.py setup`; no Godot needed).
+render_backend: godot
+# cdrca_render_script: ../cdrca/Back-end/Render/render.js   # optional; the bundled copy is used by default
