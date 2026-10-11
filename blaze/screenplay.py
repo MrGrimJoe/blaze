@@ -1,59 +1,53 @@
 """
-Blaze screenplay format — plain text a human (or any LLM) can write.
+Blaze screenplay format: plain text with exact values, nothing guessed from words.
 
     TITLE: The Lost Key
     SUBTITLE: A short story
-    STYLE: bubbles            # bubbles | subtitles (karaoke-highlighted) | both
-    CAST: JOHN = man, detective, red coat, glasses
-    CAST: MARY = woman, blue dress, long hair
-    CAST: ROBO = asset:robo        # use library/characters/robo.png instead of generated art
+    CAST: JOHN gender=m coat=1 hat=fedora glasses=1 top=0xd64036
+    CAST: MARY gender=f hairstyle=long top=0x3c78d6
+    CAST: ROBO asset=robo                      # your own library/characters/robo.png
 
-    SCENE: rainy street at night
-    BACKDROP: my_lab               # optional: your own background (library/backdrops/my_lab.png or a path)
-    JOHN: I heard something inside the warehouse.
-    MARY (nervous): Stay close to me.
-    [CAMERA push]                 (accepted, but skipped until CDRCA has camera control)
-    [ENTER TIM right]
-    TIM: Wait for me!
-    [MOVE JOHN left]  [HOP MARY]  [PAUSE 1]  [EXIT TIM right]
-    > Narrator lines start with a ">" and show as a caption.
+    SCENE: street at night                     # a label for you; it is not interpreted
+    BACKDROP: gen:street:night_rain            # gen:<place>:<mood>, or a library backdrop name, or an image path
+    JOHN: Did you hear that?
+    MARY (nervous): It is just the wind.       # (...) after the name is a note and is ignored
+    > A narrator line starts with ">".
+    [ENTER TIM 9.5 4.2]     enter: start x, end x          [EXIT TIM 9.5]      walk to x and leave
+    [MOVE JOHN 0]           walk to x                       [HOP MARY]  [PAUSE 1.5]
 
-    INT. WAREHOUSE - NIGHT        (screenplay-style scene headings work too)
-
-Blank lines and lines starting with # or // are ignored. Parentheses on their own line, like
-(John looks around), are treated as stage directions and ignored.
+Positions are x coordinates in scene units (0 is the middle; the visible width is about 13.6 at the 16:9 default; a character
+is about 2.4 wide). Characters on stage at the start are spread evenly. Blank lines and lines starting with # or // are ignored.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-DIRECTIVES = {"TITLE", "SUBTITLE", "STYLE", "CAST", "SCENE", "BACKDROP", "NARRATOR", "WEATHER", "FPS", "VOICE"}
+DIRECTIVES = {"TITLE", "SUBTITLE", "CAST", "SCENE", "BACKDROP", "NARRATOR"}
 
 
 @dataclass
 class Beat:
-    kind: str                      # say | narr | enter | exit | move | hop | pause | camera | weather
+    kind: str                      # say | narr | enter | exit | move | hop | pause
     who: str = ""
     text: str = ""
-    arg: str = ""                  # side / slot / seconds / camera mode / weather kind
+    nums: List[float] = field(default_factory=list)
 
 
 @dataclass
 class Scene:
     heading: str
     beats: List[Beat] = field(default_factory=list)
-    backdrop: str = ""             # name of a library backdrop, or an image path (BACKDROP:)
+    backdrop: str = ""             # gen:<place>:<mood> | library name | image path ("" = gen:street:day)
 
 
 @dataclass
 class Screenplay:
     title: str = ""
     subtitle: str = ""
-    style: str = "bubbles"
-    cast: Dict[str, str] = field(default_factory=dict)       # display name -> description
+    cast: Dict[str, str] = field(default_factory=dict)       # display name -> "key=value ..." (see art.appearance_for)
     scenes: List[Scene] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
 
@@ -73,6 +67,7 @@ class ScreenplayError(Exception):
 _NAME_LINE = re.compile(r"^([A-Za-z][A-Za-z0-9 _'.\-]{0,23}?)\s*(?:\(([^)]*)\))?\s*:\s*(.+)$")
 _BRACKET = re.compile(r"\[([^\]]+)\]")
 _SLUG_HEAD = re.compile(r"^(INT\.|EXT\.|INT/EXT\.|I/E\.)\s*(.+)$", re.I)
+_NUMBER = re.compile(r"^-?\d+(\.\d+)?$")
 
 
 def _display(name: str) -> str:
@@ -111,7 +106,6 @@ def parse(text: str) -> Screenplay:
             cur_scene().beats.append(Beat("narr", text=line[1:].strip()))
             continue
 
-        # a line made only of [commands]
         if line.startswith("["):
             rest = _BRACKET.sub("", line).strip()
             if rest:
@@ -131,47 +125,34 @@ def parse(text: str) -> Screenplay:
         if key in DIRECTIVES:
             if key == "TITLE": sp.title = body
             elif key == "SUBTITLE": sp.subtitle = body
-            elif key == "STYLE":
-                v = body.lower().split()[0]
-                if v not in ("bubbles", "subtitles", "both"):
-                    sp.warnings.append(f"line {n}: unknown STYLE {v!r} (use bubbles, subtitles or both)")
-                else:
-                    sp.style = v
             elif key == "CAST":
-                cm = re.match(r"^([^=:]+?)\s*[=:]\s*(.*)$", body)
-                if cm: sp.cast[who(cm.group(1))] = cm.group(2).strip()
-                else: sp.cast[who(body)] = ""
+                parts = body.split(None, 1)
+                if not parts:
+                    raise ScreenplayError(f"line {n}: CAST needs a name")
+                sp.cast[who(parts[0])] = parts[1] if len(parts) > 1 else ""
             elif key == "SCENE":
                 sp.scenes.append(Scene(heading=body))
             elif key == "NARRATOR":
                 cur_scene().beats.append(Beat("narr", text=body))
-            elif key == "WEATHER":
-                cur_scene().beats.append(Beat("weather", arg=body.lower()))
             elif key == "BACKDROP":
                 cur_scene().backdrop = body
             continue
+        if key in ("STYLE", "CAMERA", "WEATHER"):
+            sp.warnings.append(f"line {n}: {key} is not supported (text always shows as a speech box; there is no camera or weather)")
+            continue
 
         name = who(head)
-        if paren and name not in sp.cast and re.search(r"[a-z]", paren, re.I):
-            # "MARY (woman, red coat): ..." — treat as a cast description if it describes looks,
-            # otherwise it is just an acting note like (nervous) and is ignored.
-            if re.search(r"\b(man|woman|boy|girl|child|hair|coat|dress|hat|glasses|shirt|beard|jacket|hoodie)\b", paren, re.I):
-                sp.cast[name] = paren.strip()
         scene = cur_scene()
-        beats = scene.beats
-        # inline commands after the dialogue: JOHN: Hello. [HOP JOHN]
         cmds = _BRACKET.findall(body)
         spoken = _BRACKET.sub("", body).strip()
         if spoken:
-            beats.append(Beat("say", who=name, text=spoken))
+            scene.beats.append(Beat("say", who=name, text=spoken))
         for cmd in cmds:
             _command(cmd, scene, who, sp, n)
 
     sp.scenes = [s for s in sp.scenes if s.beats or s.heading]
     if not any(b.kind in ("say", "narr") for s in sp.scenes for b in s.beats):
         raise ScreenplayError("The screenplay has no dialogue or narration lines.")
-    for s in sp.scenes:
-        s.beats = [b for b in s.beats if b.kind != "weather" or b.arg]
     return sp
 
 
@@ -180,23 +161,23 @@ def _command(cmd: str, scene: Scene, who, sp: Screenplay, n: int) -> None:
     if not parts:
         return
     op, args = parts[0].upper(), parts[1:]
-    try:
-        if op in ("ENTER", "EXIT"):
-            side = args[-1].lower() if len(args) > 1 and args[-1].lower() in ("left", "right") else ""
-            name = " ".join(args[:-1] if side else args)
-            scene.beats.append(Beat(op.lower(), who=who(name), arg=side))
-        elif op == "MOVE":
-            name, dest = " ".join(args[:-1]), args[-1].lower()
-            scene.beats.append(Beat("move", who=who(name), arg=dest))
-        elif op == "HOP":
-            scene.beats.append(Beat("hop", who=who(" ".join(args))))
-        elif op == "PAUSE":
-            scene.beats.append(Beat("pause", arg=str(float(args[0]) if args else 1.0)))
-        elif op == "CAMERA":
-            scene.beats.append(Beat("camera", arg=args[0].lower()))
-        elif op == "WEATHER":
-            scene.beats.append(Beat("weather", arg=args[0].lower()))
-        else:
-            sp.warnings.append(f"line {n}: unknown command [{cmd}]")
-    except (IndexError, ValueError):
-        sp.warnings.append(f"line {n}: could not read command [{cmd}]")
+
+    def numbers(count: int):
+        """Split 'NAME WITH SPACES 1.5 2' into (name, [1.5, 2]); the numbers are exactly `count`, at the end."""
+        tail = args[len(args) - count:] if count else []
+        if len(args) < count or not all(_NUMBER.match(t) for t in tail):
+            raise ScreenplayError(f"line {n}: [{cmd}] needs {count} exact number(s) at the end (positions are x values, not words)")
+        return " ".join(args[:len(args) - count]), [float(t) for t in tail]
+
+    if op == "ENTER":
+        name, nums = numbers(2); scene.beats.append(Beat("enter", who=who(name), nums=nums))
+    elif op == "EXIT":
+        name, nums = numbers(1); scene.beats.append(Beat("exit", who=who(name), nums=nums))
+    elif op == "MOVE":
+        name, nums = numbers(1); scene.beats.append(Beat("move", who=who(name), nums=nums))
+    elif op == "HOP":
+        scene.beats.append(Beat("hop", who=who(" ".join(args))))
+    elif op == "PAUSE":
+        _, nums = numbers(1); scene.beats.append(Beat("pause", nums=nums))
+    else:
+        sp.warnings.append(f"line {n}: unknown command [{cmd}]")

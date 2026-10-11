@@ -1,0 +1,47 @@
+# OPTIONAL, and nothing else depends on it. People who use Blaze bring their own AI keys; none is needed to build, test or ship it.
+# If you ever want proof against a real provider, add that provider's key as a repository secret (ANTHROPIC_API_KEY,
+# GEMINI_API_KEY or OPENAI_API_KEY) and run this by hand. Without the secret the run says so and passes. It makes only a handful
+# of requests (a 2-scene story).
+name: AI writer against a real provider
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Which provider to test"
+        type: choice
+        options: [anthropic, gemini, openai]
+        default: anthropic
+      idea:
+        description: "The story idea to send"
+        default: "two friends find a message in a bottle on a beach"
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pip install -r requirements.txt anthropic openai google-genai
+      - name: The renderer's browser
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Write and render a story with the real provider
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python tools/live_ai_check.py --provider "${{ inputs.provider }}" --idea "${{ inputs.idea }}" --out live-ai-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-ai-results
+          path: live-ai-results

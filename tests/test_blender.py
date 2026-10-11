@@ -89,8 +89,8 @@ class TestLibrary:
 
 class TestScreenplayAssets:
     def test_backdrop_directive_and_asset_cast(self):
-        sp = parse("CAST: ROBO = asset:robo\nSCENE: lab\nBACKDROP: my_lab\nROBO: hi\n")
-        assert sp.scenes[0].backdrop == "my_lab" and sp.cast["Robo"] == "asset:robo"
+        sp = parse("CAST: ROBO asset=robo\nSCENE: lab\nBACKDROP: my_lab\nROBO: hi\n")
+        assert sp.scenes[0].backdrop == "my_lab" and sp.cast["Robo"] == "asset=robo"
 
 
 class TestPipelineWithLibrary:
@@ -100,7 +100,7 @@ class TestPipelineWithLibrary:
     def test_library_character_and_backdrop_are_used(self, tmp_path):
         png(tmp_path / "library" / "characters" / "robo.png"); png(tmp_path / "library" / "characters" / "robo_talk.png")
         Image.new("RGB", (64, 36), (0, 90, 200)).save(tmp_path / "library" / "backdrops" / "lab.png") if (tmp_path / "library" / "backdrops").mkdir(parents=True) is None else None
-        text = "CAST: ROBO = asset:robo\nSCENE: x\nBACKDROP: lab\nROBO: hi\nMARY: hello\n"
+        text = "CAST: ROBO asset=robo\nSCENE: x\nBACKDROP: lab\nROBO: hi\nMARY: hello\n"
         sp, manifest = create_project(text, tmp_path / "proj", self._opts(library=tmp_path / "library"))
         assets = {p.name for p in (tmp_path / "proj" / "assets").iterdir()}
         assert {"robo.png", "robo_talk.png", "bg_custom_lab.png", "mary.png"} <= assets     # Mary is generated, Robo is yours
@@ -110,7 +110,7 @@ class TestPipelineWithLibrary:
 
     def test_missing_asset_is_a_clear_error(self, tmp_path):
         with pytest.raises(BlazeError, match="asset 'ghost'"):
-            create_project("CAST: G = asset:ghost\nSCENE: x\nG: hi\nB: yo\n", tmp_path / "p", self._opts(library=tmp_path / "library"))
+            create_project("CAST: G asset=ghost\nSCENE: x\nG: hi\nB: yo\n", tmp_path / "p", self._opts(library=tmp_path / "library"))
         with pytest.raises(BlazeError, match="BACKDROP: 'nowhere'"):
             create_project("SCENE: x\nBACKDROP: nowhere\nA: hi\nB: yo\n", tmp_path / "p2", self._opts(library=tmp_path / "library"))
 
@@ -172,3 +172,9 @@ def test_blender_assets_end_to_end(fixtures, tmp_path):
     res = make("CAST: ROBO = asset:robo\nSCENE: x\nBACKDROP: lab\nROBO: Hello.\nMARY: Hi!\n", tmp_path / "o.mp4",
                Options(width=320, height=180, fps=8, voice="off", library=tmp_path / "library", progress=lambda m: None))
     assert res.video.exists() and res.video.stat().st_size > 1000
+
+
+@pytest.mark.skipif(not os.environ.get("BLAZE_REQUIRE_BLENDER"), reason="CI sets BLAZE_REQUIRE_BLENDER so a missing Blender fails the build")
+def test_ci_has_blender():
+    from blaze import blender
+    assert blender.find_blender() is not None, "Blender was not found in CI"

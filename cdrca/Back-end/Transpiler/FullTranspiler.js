@@ -193,7 +193,7 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);
   ];
   let defaultTemplateRenderer_OBJs = [
     {
-      placeholder: ["ACTION_DEF", "PROP_DEF", "PROP_USE", "ACTION_USE"],
+      placeholder: ["JS_BLOCK", "ACTION_DEF", "PROP_DEF", "PROP_USE", "ACTION_USE"],
       toString: general3DastToSTRplaceholder,
     },
 
@@ -386,6 +386,8 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
   function reshapeToInps(PST) {
     let sessionContext = {};
     let inputs = {
+      // embedded JS blocks, emitted before everything else (they may set things up that defs rely on)
+      JS_BLOCK: [],
       // defs
       ACTION_DEF: [],
       PROP_DEF: [],
@@ -491,6 +493,16 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
     for (let i = 0; i < scenes.length; i++) {
       // console.log(scenes[i]);
       let input = scenes[i];
+      // A header block that only defines things (def PROP / def ACTION / JS) and uses no prop, runs no
+      // action and sets no scene option is not a scene: it would play as an empty scene (intro + end).
+      const isEmpty = (key) => !input[key] || input[key].length === 0;
+      if (
+        isEmpty("prop_use") &&
+        isEmpty("action_use") &&
+        Object.keys(DEFAULT_SCENE_OPTIONS).every(isEmpty)
+      ) {
+        continue;
+      }
       // Without these the renderer gets undefined times (NaN comparisons), never leaves its first
       // scene, and so never plays any action.
       for (const key of Object.keys(DEFAULT_SCENE_OPTIONS)) {

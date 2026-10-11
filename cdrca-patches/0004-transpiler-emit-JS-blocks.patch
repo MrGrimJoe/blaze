@@ -1,0 +1,76 @@
+From a0da6d9c5245dd5f1a93765cc43afb758d8b2bea Mon Sep 17 00:00:00 2001
+From: "Claude (for MrMIB)" <noreply@anthropic.com>
+Date: Sat, 3 Oct 2026 19:04:05 +0000
+Subject: [PATCH 04/11] transpiler: emit JS { } blocks
+
+The parser accepted 'JS { ... }' and the partial transpiler turned it into an IIFE, but the full transpiler's
+inputs had no 'JS_BLOCK' entry, so the statement was silently dropped and never ran. Give it a slot at the
+very start of the output (before defs and uses, since defs may rely on what a block sets up) and end the IIFE
+with ';' so the next statement cannot be glued to it. A block is still an IIFE: it can set globals
+(globalThis.x = ...), its own vars stay local. Test added.
+---
+ Back-end/Transpiler/FullTranspiler.js     |  4 +++-
+ Back-end/Transpiler/Partial_transpiler.js |  2 +-
+ tests/transpiler.test.js                  | 13 +++++++++++++
+ 3 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/Back-end/Transpiler/FullTranspiler.js b/Back-end/Transpiler/FullTranspiler.js
+index dade3c8..85db9f2 100644
+--- a/Back-end/Transpiler/FullTranspiler.js
++++ b/Back-end/Transpiler/FullTranspiler.js
+@@ -193,7 +193,7 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);
+   ];
+   let defaultTemplateRenderer_OBJs = [
+     {
+-      placeholder: ["ACTION_DEF", "PROP_DEF", "PROP_USE", "ACTION_USE"],
++      placeholder: ["JS_BLOCK", "ACTION_DEF", "PROP_DEF", "PROP_USE", "ACTION_USE"],
+       toString: general3DastToSTRplaceholder,
+     },
+ 
+@@ -386,6 +386,8 @@ currentANIM = ObjectAnimationSystem_INS.main(OAS_OBJ).init(60, true);`,
+   function reshapeToInps(PST) {
+     let sessionContext = {};
+     let inputs = {
++      // embedded JS blocks, emitted before everything else (they may set things up that defs rely on)
++      JS_BLOCK: [],
+       // defs
+       ACTION_DEF: [],
+       PROP_DEF: [],
+diff --git a/Back-end/Transpiler/Partial_transpiler.js b/Back-end/Transpiler/Partial_transpiler.js
+index fd736b9..769e3a8 100644
+--- a/Back-end/Transpiler/Partial_transpiler.js
++++ b/Back-end/Transpiler/Partial_transpiler.js
+@@ -233,7 +233,7 @@ ${statment.prams.code}
+         return ADD_ImportEmbeding(statement, options);
+         break;
+       case "JS_BLOCK":
+-        return { value: `(()=>{${statement.prams.code}})()`, type: "JS_BLOCK" };
++        return { value: `(()=>{${statement.prams.code}})();`, type: "JS_BLOCK" };
+         break;
+       case "PROP_DEF":
+         return {
+diff --git a/tests/transpiler.test.js b/tests/transpiler.test.js
+index 7342f60..048f8e2 100644
+--- a/tests/transpiler.test.js
++++ b/tests/transpiler.test.js
+@@ -48,4 +48,17 @@ test("def ACTION: negative numbers are one parameter (and several parts per line
+   assert(/propsARR\[1\]\.modifyMesh\(mesh, totalTime, lerpProgress, step, 2\)/.test(js), "cube part should get 2");
+ });
+ 
++test("JS { } blocks are emitted (they were parsed, then dropped), before the definitions", () => {
++  const P = "ObjectAnimationSystem_INS.CORE_3d_PROPSsceneSYS.exampleProps.";
++  const js = run("JS { globalThis.zzMarker = 40 + 2; }\n!--- SCENE a :: x ---\nuse " + P + "BouncingSphereProp() as ball\n!---END---\n");
++  assert(js.includes("globalThis.zzMarker"), "the JS block should be in the output");
++  assert(js.indexOf("zzMarker") < js.indexOf("var ball"), "and run before the props are created");
++  vm_run(js);
++  function vm_run(code) { // the block really executes (as an IIFE: it can set globals, but its own vars stay local)
++    const ctx = { globalThis: null };
++    new Function("globalThis", "var ObjectAnimationSystem_INS={CORE_3d_PROPSsceneSYS:{exampleProps:{BouncingSphereProp:function(){}}}};var THREE={DataTexture:function(){},RGBFormat:0};var currentANIM;" + code.replace(/currentANIM = [^;]*;/, "") )(ctx);
++    assert.strictEqual(ctx.zzMarker, 42);
++  }
++});
++
+ console.log("\n" + n + " tests passed");
+-- 
+2.43.0
+

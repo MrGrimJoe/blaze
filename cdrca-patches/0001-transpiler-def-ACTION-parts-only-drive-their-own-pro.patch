@@ -1,7 +1,7 @@
-From ea1cd372bcbd36dbf4eddf2ca8695447c69ff200 Mon Sep 17 00:00:00 2001
+From c8a631a7a97e4bac9fe76a4b63c54291ec3a28dc Mon Sep 17 00:00:00 2001
 From: "Claude (for MrMIB)" <noreply@anthropic.com>
 Date: Fri, 2 Oct 2026 00:52:42 +0000
-Subject: [PATCH 1/7] transpiler: def ACTION parts only drive their own prop;
+Subject: [PATCH 01/11] transpiler: def ACTION parts only drive their own prop;
  same-name defs combine
 
 Before, every part of an action ran on EVERY prop's mesh (propsARR[n].method was called inside the

@@ -15,22 +15,20 @@ from .screenplay import ScreenplayError
 
 
 def _opts(a) -> Options:
-    w, h = (a.res or "1280x720").lower().split("x")
-    o = Options(width=int(w), height=int(h), fps=a.fps, voice=a.voice, wpm=a.wpm, style=getattr(a, "style", None),
+    w, h = (getattr(a, "res", None) or "1280x720").lower().split("x")
+    o = Options(width=int(w), height=int(h), fps=getattr(a, "fps", 24), voice=a.voice, wpm=a.wpm,
                 keep_frames=a.keep_frames, node=a.node, library=Path(a.library) if getattr(a, "library", None) else None)
     if a.workers: o.workers = a.workers
-    if a.pace: o.wpm = {"slow": 105, "normal": 150, "fast": 185}[a.pace]
     return o
 
 
-def _common(p):
+def _common(p, size=True):
     p.add_argument("-o", "--output", default=None, help="output mp4 (default: <name>.mp4 next to the input)")
-    p.add_argument("--res", default="1280x720", help="frame size, e.g. 1920x1080 (default 1280x720)")
-    p.add_argument("--fps", type=int, default=24)
+    if size:    # `build` re-renders at the size and fps stored in the project's project.json instead
+        p.add_argument("--res", default="1280x720", help="frame size, e.g. 1920x1080 (default 1280x720)")
+        p.add_argument("--fps", type=int, default=24)
     p.add_argument("--voice", default="auto", help="auto | espeak | pyttsx3 | off")
-    p.add_argument("--pace", choices=("slow", "normal", "fast"), help="speaking speed (slow ~105 wpm, good for language learners)")
-    p.add_argument("--wpm", type=int, default=150)
-    p.add_argument("--style", choices=("bubbles", "subtitles", "both"), help="dialogue display (overrides STYLE:)")
+    p.add_argument("--wpm", type=int, default=150, help="speaking speed in words per minute (about 105 is slow and clear)")
     p.add_argument("--workers", type=int, default=0, help="scenes rendered in parallel")
     p.add_argument("--keep-frames", action="store_true")
     p.add_argument("--node", default="node")
@@ -58,8 +56,17 @@ def cmd_build(a) -> int:
 
 
 def cmd_ai(a) -> int:
-    from .ai import write_screenplay
-    text = write_screenplay(a.idea, scenes=a.scenes, lines=a.lines, level=a.level, config_path=Path(a.config) if a.config else None)
+    from .ai import AnimationError, write_animation, write_screenplay
+    cfg = Path(a.config) if a.config else None
+    try:
+        if a.quick:
+            text = write_screenplay(a.idea, scenes=min(a.scenes, 3) if a.scenes == 4 else a.scenes, lines=a.lines or 14, level=a.level, config_path=cfg)
+        else:
+            text = write_animation(a.idea, scenes=a.scenes, lines_per_scene=a.lines or 5, level=a.level, config_path=cfg,
+                                   progress=lambda m: print(f"  {m}..."))
+    except (AnimationError, RuntimeError) as e:
+        print(f"\n{e}", file=sys.stderr)
+        return 2
     name = "_".join(a.idea.lower().split()[:4]) or "story"
     out = Path(a.output) if a.output else Path(name + ".mp4")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -67,6 +74,12 @@ def cmd_ai(a) -> int:
     print(f"Screenplay saved: {out.with_suffix('.txt')}\n")
     _report(make(text, out, _opts(a)))
     return 0
+
+
+def cmd_ui(a) -> int:
+    from .ui import serve
+    return serve(port=a.port, open_browser=not a.no_browser, workdir=Path(a.out) if a.out else None,
+                 library=Path(a.library) if a.library else None, auto_exit=a.auto_exit)
 
 
 def cmd_asset(a) -> int:
@@ -152,11 +165,18 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("make", help="screenplay .txt -> mp4"); p.add_argument("script"); p.add_argument("--project"); _common(p); p.set_defaults(fn=cmd_make)
-    p = sub.add_parser("build", help="re-render an edited project folder"); p.add_argument("project"); _common(p); p.set_defaults(fn=cmd_build)
+    p = sub.add_parser("build", help="re-render an edited project folder (size and fps come from its project.json)"); p.add_argument("project"); _common(p, size=False); p.set_defaults(fn=cmd_build)
     p = sub.add_parser("ai", help="idea -> screenplay (via your LLM) -> mp4"); p.add_argument("idea")
-    p.add_argument("--scenes", type=int, default=3); p.add_argument("--lines", type=int, default=14)
+    p.add_argument("--scenes", type=int, default=4, help="number of scenes (default 4)")
+    p.add_argument("--lines", type=int, default=None, help="spoken lines per scene (default 5; with --quick: in total, default 14)")
+    p.add_argument("--quick", action="store_true", help="ONE request for a short screenplay instead of one per scene (cheaper)")
     p.add_argument("--level", help="language level for the dialogue, e.g. A2"); p.add_argument("--config", help="path to a BlazEng config.yaml")
     _common(p); p.set_defaults(fn=cmd_ai)
+    p = sub.add_parser("ui", help="open the Blaze page in your browser (write, check, make, watch)")
+    p.add_argument("--port", type=int, default=8765); p.add_argument("--no-browser", action="store_true")
+    p.add_argument("--auto-exit", action="store_true", help="stop when the page is closed (the installed app does this)")
+    p.add_argument("--out", help="folder for the videos (default: ./blaze-videos)"); p.add_argument("--library")
+    p.set_defaults(fn=cmd_ui)
     p = sub.add_parser("asset", help="manage your own characters and backdrops (PNG/JPG or .blend via Blender)")
     p.add_argument("action", choices=("add", "list")); p.add_argument("file", nargs="?")
     p.add_argument("--name"); p.add_argument("--as", dest="kind", choices=("character", "backdrop"))

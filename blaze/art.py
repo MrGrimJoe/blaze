@@ -70,45 +70,70 @@ class Appearance:
         return 0.76 if self.child else 1.0
 
 
+def _num(v: str) -> int:
+    try:
+        return int(v, 0)    # 12, 0xff00ff
+    except ValueError:
+        raise ValueError(f"expected a number such as 0xd64036 (a colour written 0xRRGGBB), not {v!r}") from None
+
+
+LOOK_KEYS = {"gender", "child", "skin", "hair", "hairstyle", "top", "bottom", "coat", "dress", "hat", "glasses", "beard", "scarf"}
+
+
 def appearance_for(name: str, description: str = "") -> Appearance:
-    d = (description or "").lower()
+    """Look of a character from explicit key=value pairs (anything not given comes from a hash of the name).
+
+        gender=m|f|n  child=0|1  skin=0..5 or 0xRRGGBB  hair=0xRRGGBB  hairstyle=short|long|bun|bald|curly|spiky
+        top=0xRRGGBB  bottom=0xRRGGBB  coat=0|1  dress=0|1  hat=none|fedora|cap|beanie  glasses=0|1  beard=0|1  scarf=0|1
+    """
+    kv = parse_pairs(description)
+    unknown = sorted(set(kv) - LOOK_KEYS)
+    if unknown:
+        raise ValueError(f"{name}: unknown look key {unknown[0]!r}; valid keys: {', '.join(sorted(LOOK_KEYS))}")
+    for flag in ("child", "coat", "dress", "glasses", "beard", "scarf"):
+        if flag in kv and kv[flag] not in ("0", "1"):
+            raise ValueError(f"{name}: {flag} must be 0 or 1, not {kv[flag]!r}")
     h = _h(name.lower())
     pick = lambda seq, k: seq[(h >> k) % len(seq)]
-
-    gender = "n"
-    if re.search(r"\b(woman|girl|female|lady|mother|mom|mum|she|her|queen|actress|grandma|sister)\b", d): gender = "f"
-    elif re.search(r"\b(man|boy|male|father|dad|he|his|king|grandpa|brother|guy)\b", d): gender = "m"
-    else: gender = "f" if (h >> 3) % 2 else "m"
-    child = bool(re.search(r"\b(child|kid|boy|girl|little|toddler|young)\b", d))
-
+    gender = kv.get("gender", "f" if (h >> 3) % 2 else "m")
+    if gender not in ("m", "f", "n"):
+        raise ValueError(f"{name}: gender must be m, f or n, not {gender!r}")
+    child = kv.get("child", "0") == "1"
     skin = pick(SKINS, 5)
-    for word, col in (("pale", SKINS[0]), ("dark-skinned", SKINS[4]), ("tan skin", SKINS[2])):
-        if word in d: skin = col
-    hair = pick(HAIRS, 9)
-    m = re.search(r"\b(" + "|".join(COLORS) + r"|blond|blonde)\s+hair\b", d)
-    if m: hair = (214, 170, 80) if m.group(1).startswith("blond") else COLORS[m.group(1)]
-    style = pick(["short", "short", "spiky", "curly"], 13) if gender != "f" else pick(["long", "long", "bun", "short", "curly"], 13)
-    for k in ("bald", "long", "bun", "curly", "spiky", "short"):
-        if re.search(r"\b" + k + r"\b", d): style = k
-
-    top = COLORS[pick(TOPS, 17)]
-    bottom = pick(BOTTOMS, 21)
-    m = re.search(r"\b(" + "|".join(COLORS) + r")\s+" + GARMENTS_TOP, d)
-    if m: top = COLORS[m.group(1)]
-    m = re.search(r"\b(" + "|".join(COLORS) + r")\s+" + GARMENTS_BOTTOM, d)
-    if m: bottom = COLORS[m.group(1)]
-
+    if "skin" in kv:
+        v = _num(kv["skin"])
+        skin = SKINS[v] if v < len(SKINS) else ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+    color = lambda v: ((_num(v) >> 16) & 255, (_num(v) >> 8) & 255, _num(v) & 255)
+    hair = color(kv["hair"]) if "hair" in kv else pick(HAIRS, 9)
+    style = kv.get("hairstyle") or (pick(["short", "short", "spiky", "curly"], 13) if gender != "f" else pick(["long", "long", "bun", "short", "curly"], 13))
+    if style not in ("short", "long", "bun", "bald", "curly", "spiky"):
+        raise ValueError(f"{name}: unknown hairstyle {style!r}")
+    top = color(kv["top"]) if "top" in kv else COLORS[pick(TOPS, 17)]
+    bottom = color(kv["bottom"]) if "bottom" in kv else pick(BOTTOMS, 21)
     a = Appearance(skin=skin, hair=hair, hair_style=style, top=top, bottom=bottom, gender=gender, child=child)
-    a.coat = bool(re.search(r"\b(coat|trench|cloak|robe|detective|suit|jacket)\b", d))
-    a.dress = bool(re.search(r"\b(dress|skirt|gown)\b", d)) or (gender == "f" and not a.coat and (h >> 25) % 3 == 0 and not child)
-    if re.search(r"\b(fedora|detective)\b", d): a.hat = "fedora"
-    elif re.search(r"\b(beanie)\b", d): a.hat = "beanie"
-    elif re.search(r"\b(cap|hat)\b", d): a.hat = "cap"
-    a.glasses = bool(re.search(r"\b(glasses|spectacles|specs)\b", d))
-    a.beard = bool(re.search(r"\b(beard|mustache|moustache)\b", d)) or (gender == "m" and not child and not re.search(r"\b(clean)\b", d) and (h >> 29) % 5 == 0)
-    a.scarf = bool(re.search(r"\b(scarf)\b", d))
-    if a.hat and style == "bun": a.hair_style = "short"
+    a.coat = kv.get("coat", "0") == "1"
+    a.dress = kv["dress"] == "1" if "dress" in kv else False
+    hat = kv.get("hat", "none")
+    if hat not in ("none", "fedora", "cap", "beanie"):
+        raise ValueError(f"{name}: unknown hat {hat!r}")
+    a.hat = None if hat == "none" else hat
+    a.glasses = kv.get("glasses", "0") == "1"
+    a.beard = kv.get("beard", "0") == "1"
+    a.scarf = kv.get("scarf", "0") == "1"
+    if a.hat and a.hair_style == "bun":
+        a.hair_style = "short"
     return a
+
+
+def parse_pairs(text: str) -> Dict[str, str]:
+    """'a=1 b=0xff c=x' -> {'a': '1', 'b': '0xff', 'c': 'x'}; anything that is not key=value is an error."""
+    out: Dict[str, str] = {}
+    for tok in (text or "").split():
+        if "=" not in tok:
+            raise ValueError(f"expected key=value, got {tok!r}")
+        k, v = tok.split("=", 1)
+        out[k.strip().lower()] = v.strip()
+    return out
 
 
 # ------------------------------------------------------------------ characters
@@ -253,43 +278,25 @@ MOODS = {
     "storm": Mood("storm", (38, 44, 62), (78, 86, 106), (0.5, 0.55, 0.68), 0x9AA6C0, night=True, weather="storm"),
     "snow": Mood("snow", (170, 182, 198), (226, 232, 240), (0.92, 0.95, 1.0), 0xEAF0FF, weather="snow"),
 }
-MOOD_ALIASES = {"rainy": "rain", "raining": "rain", "stormy": "storm", "thunder": "storm", "snowy": "snow", "dark": "night",
-                "evening": "sunset", "dusk": "sunset", "dawn": "sunset", "morning": "day", "sunny": "day", "noon": "day",
-                "moody": "dim", "gloomy": "dim", "cloudy": "rain"}
+NIGHT_WET = {
+    "night_rain": Mood("night_rain", MOODS["night"].sky_top, MOODS["night"].sky_bot, MOODS["night"].light, MOODS["night"].tint, night=True, weather="rain"),
+    "night_snow": Mood("night_snow", MOODS["night"].sky_top, MOODS["night"].sky_bot, MOODS["night"].light, MOODS["night"].tint, night=True, weather="snow"),
+}
+PLACES = ("street", "room", "warehouse", "forest", "beach", "office")
 
 
-def mood_from(text: str) -> Mood:
-    """First mood word wins, except that rain/snow + night combine (a rainy night is dark AND wet)."""
-    t = (text or "").lower()
-    found = []
-    for w in re.findall(r"[a-z]+", t):
-        w = MOOD_ALIASES.get(w, w)
-        if w in MOODS and w not in found:
-            found.append(w)
-    if not found:
-        return MOODS["day"]
-    if found[0] in ("rain", "snow") and "night" in found or found[0] == "night" and any(f in ("rain", "snow") for f in found):
-        wet = next(f for f in found if f in ("rain", "snow"))
-        n = MOODS["night"]
-        return Mood(f"night_{wet}", n.sky_top, n.sky_bot, n.light, n.tint, night=True, weather=wet)
-    return MOODS[found[0]]
-
-
-PLACES = [
-    ("street", r"street|city|road|alley|town|sidewalk|downtown|avenue|outside|corner"),
-    ("warehouse", r"warehouse|factory|garage|basement|dungeon|cellar|storage|hangar|cave"),
-    ("forest", r"forest|woods|jungle|park|garden|camp|trail|field|farm"),
-    ("beach", r"beach|sea|ocean|shore|lake|harbor|dock|coast"),
-    ("office", r"office|school|classroom|lab|shop|cafe|restaurant|bank|library|store|station|hospital|airport|meeting"),
-    ("room", r"room|house|home|kitchen|bedroom|apartment|hall|living|flat|hotel|inside|indoors"),
-]
-
-
-def place_from(text: str) -> str:
-    t = (text or "").lower()
-    for name, pat in PLACES:
-        if re.search(pat, t): return name
-    return "street"
+def parse_generator(spec: str):
+    """'gen:<place>:<mood>' -> (place, Mood); both parts are exact ids, nothing is guessed from words."""
+    parts = spec.split(":")
+    if len(parts) != 3 or parts[0] != "gen":
+        raise ValueError(f"backdrop generator must look like gen:<place>:<mood>, not {spec!r}")
+    _, place, mood = parts
+    if place not in PLACES:
+        raise ValueError(f"unknown place {place!r}; use one of: {', '.join(PLACES)}")
+    m = MOODS.get(mood) or NIGHT_WET.get(mood)
+    if m is None:
+        raise ValueError(f"unknown mood {mood!r}; use one of: {', '.join(list(MOODS) + list(NIGHT_WET))}")
+    return place, m
 
 
 W, H = 1920, 1080

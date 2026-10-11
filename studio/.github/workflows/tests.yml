@@ -1,0 +1,145 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system Qt + ffmpeg dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon0 libgl1 ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # transformers/diffusers are intentionally NOT in requirements.txt --
+      # they're optional (only needed if someone picks a local HF/diffusers
+      # provider) and pull in real weights on first use. But
+      # test_huggingface_provider.py / test_diffusers_provider.py patch
+      # module-level names (_hf_pipeline, _AutoPipelineForText2Image) that
+      # only exist once the real import succeeds; without these two
+      # installed, that import falls into the except ImportError branch and
+      # the name never gets defined, so mock.patch has nothing to target.
+      # Installing them here doesn't pull in torch and needs no network
+      # beyond PyPI -- these tests never touch a real model.
+      - name: Install optional provider deps needed for test mocking
+        run: pip install transformers diffusers
+
+      - name: Run test suite
+        id: run_tests
+        continue-on-error: true
+        # No API keys needed: the suite is designed to run fully offline
+        # via dummy providers, and the cloud-provider tests mock the SDKs
+        # client rather than hitting the live API.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pytest tests/ -v --cov=src/core --cov=src/providers --cov-report=term-missing 2>&1 | tee pytest_output.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Commit test log on failure (self-diagnosing)
+        # Real cause found via this same mechanism, not flaky: ffmpeg
+        # wasn't installed on the runner at all ("ffmpeg binary not found"),
+        # and 3.11/3.12 alternating which one showed as the failure was
+        # just fail-fast racing -- both would've failed the same way, but
+        # whichever matrix job finished first got reported before the
+        # other could also fail, so the other showed as cancelled instead.
+        # Left this mechanism in place for whatever comes up next.
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin ci-debug-logs || true
+          git checkout -B ci-debug-logs
+          cp pytest_output.log "pytest-py${{ matrix.python-version }}-run${{ github.run_number }}.log"
+          git add -f "pytest-py${{ matrix.python-version }}-run${{ github.run_number }}.log"
+          git commit -m "CI debug log: pytest failure py${{ matrix.python-version }}, run ${{ github.run_number }}"
+          git push origin ci-debug-logs --force
+
+      - name: Fail the job if tests actually failed
+        if: steps.run_tests.outcome == 'failure'
+        run: exit 1
+
+      - name: Verify app boots (smoke test)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          mkdir -p /tmp/smoketest && cd /tmp/smoketest
+          cp -r $GITHUB_WORKSPACE/* .
+          cat > config.yaml << 'EOF'
+          storage_path: ./storage
+          text_provider: dummy
+          vision_provider: dummy
+          image_provider: dummy
+          EOF
+          python -c "
+          import main
+          config = main.load_config()
+          main.ensure_storage(config)
+          director, orchestrator, world_state, asset_manager = main.build_pipeline(config)
+          print('Smoke test passed: pipeline builds without error')
+          "
+
+  godot-integration:
+    # Separate job from the fast unit-test suite above: this downloads a
+    # ~78MB Godot binary and does real headless rendering, so it's slower
+    # and only worth running on main rather than on every PR push.
+    # See tests/test_godot_renderer.py and tests/test_orchestrator.py for
+    # what these integration tests actually verify, and ARCHITECTURE.md's
+    # "Godot rendering notes" for why the --headless flag alone doesn't
+    # work here (real finding from development, not a guess).
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install system dependencies (Qt offscreen + Xvfb + Godot's runtime libs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon0 libgl1 xvfb
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download real Godot binary
+        run: |
+          curl -sL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip"
+          unzip -q /tmp/godot.zip -d /tmp/godot_bin
+          chmod +x /tmp/godot_bin/Godot_v4.7.2-stable_linux.x86_64
+          echo "BLAZENG_GODOT_BINARY=/tmp/godot_bin/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Run Godot integration tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -m pytest tests/test_godot_renderer.py tests/test_orchestrator.py -v -k "Real"

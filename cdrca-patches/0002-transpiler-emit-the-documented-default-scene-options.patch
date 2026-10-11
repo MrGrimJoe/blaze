@@ -1,7 +1,7 @@
-From 06a182206ce00ca1b73b483cd8ef919d2b70e5ff Mon Sep 17 00:00:00 2001
+From 92416732187e42021034dc026eaeb6c410d489de Mon Sep 17 00:00:00 2001
 From: "Claude (for MrMIB)" <noreply@anthropic.com>
 Date: Fri, 2 Oct 2026 00:53:38 +0000
-Subject: [PATCH 2/7] transpiler: emit the documented default scene options
+Subject: [PATCH 02/11] transpiler: emit the documented default scene options
  when a scene sets none
 
 stayTimeInit / stayTimeEnd / lerpTime / backgroundColor were only emitted when a header set them, and

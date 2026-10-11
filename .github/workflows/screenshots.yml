@@ -1,0 +1,170 @@
+# Photographs every screen so you can check by eye that the UI loads right and looks right:
+#   * the Blaze page in every state (real Chrome, so the finished video plays),
+#   * the desktop studio's windows,
+#   * the Windows installer, page by page, and the installed app's page (via the installer workflow).
+# Then builds one gallery. Open it from the run's summary, or at the ci-screenshots branch of this repository.
+name: Screens
+
+on:
+  workflow_dispatch:
+  push:                    # every push: nothing has to be started by hand
+
+concurrency:
+  group: screens-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  installer:
+    uses: ./.github/workflows/build-blaze-installer.yml
+    permissions:
+      contents: write
+    with:
+      publish_release: false
+
+  page:
+    name: The Blaze page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng
+      - run: pip install -r requirements.txt
+      - name: The renderer's browser
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Start Blaze (its own temporary config, so nothing real is touched)
+        run: |
+          export BLAZE_CONFIG="$RUNNER_TEMP/config.yaml"
+          cp studio/config.yaml "$BLAZE_CONFIG"
+          nohup python blaze.py ui --no-browser --port 8765 --out "$RUNNER_TEMP/videos" > ui.log 2>&1 &
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/api/status > /dev/null && break; sleep 1; done
+      - name: Photograph every state (real Google Chrome)
+        env:
+          BASE_URL: http://127.0.0.1:8765
+          OUT: screens/page
+          CHANNEL: chrome
+          NODE_PATH: ${{ github.workspace }}/cdrca/node_modules
+        run: node tools/screens/ui_screens.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-page
+          path: screens/page
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: page-server-log
+          path: ui.log
+          if-no-files-found: ignore
+
+  studio:
+    name: The desktop studio's windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3 fonts-dejavu-core ffmpeg
+      - run: pip install PyQt6 pyyaml pydantic requests pillow
+      - name: The browser the offline demo renders with (so the finished-video screen is a real run)
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - run: python tools/screens/studio_screens.py --out screens/studio
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screens-studio
+          path: screens/studio
+
+  gallery:
+    name: One gallery of everything
+    needs: [installer, page, studio]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: screens-*
+          path: collected
+      - name: Build the gallery
+        run: |
+          mkdir -p gallery
+          for d in collected/screens-*; do
+            name="${d#collected/screens-}"
+            mkdir -p "gallery/$name" && cp -r "$d"/. "gallery/$name"/
+          done
+          python tools/screens/make_gallery.py gallery --title "Blaze screens" --note "Run ${{ github.run_number }} of commit ${GITHUB_SHA::7} on ${{ github.ref_name }}. Look at each screen; the line under it says what to check."
+          ls -R gallery | head -60
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blaze-screens-gallery
+          path: gallery
+      - name: Publish the gallery on the ci-screenshots branch
+        if: github.ref_type == 'branch'
+        run: |
+          cd gallery
+          git init -q -b ci-screenshots
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screens for run ${{ github.run_number }} (${GITHUB_SHA::7})"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-screenshots
+      - name: Summary
+        run: |
+          {
+            echo "## Screens for run ${{ github.run_number }}"
+            echo
+            echo "Open the gallery: https://github.com/${{ github.repository }}/blob/ci-screenshots/README.md"
+            echo
+            echo "It is also attached to this run as the artifact **blaze-screens-gallery** (unzip and open README.md)."
+            echo
+            head -8 gallery/README.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report:
+    name: The result, in one place
+    needs: [installer, page, studio, gallery]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the report
+        run: |
+          mark() { case "$1" in success) echo "passed";; failure) echo "FAILED";; cancelled) echo "cancelled";; skipped) echo "skipped";; *) echo "$1";; esac; }
+          {
+            echo "## Blaze: what happened in run ${{ github.run_number }}"
+            echo
+            echo "| Part | Result |"
+            echo "|---|---|"
+            echo "| Windows installer: built, installed, used, uninstalled | $(mark '${{ needs.installer.result }}') |"
+            echo "| The Blaze page photographed in real Chrome | $(mark '${{ needs.page.result }}') |"
+            echo "| The desktop studio's windows photographed | $(mark '${{ needs.studio.result }}') |"
+            echo "| The gallery built | $(mark '${{ needs.gallery.result }}') |"
+            echo
+            echo "Screens: https://github.com/${{ github.repository }}/blob/ci-screenshots/README.md"
+            echo
+            echo "Tests run in the separate **tests** workflow (Windows, macOS, Linux, Blender, docs and licence)."
+            echo "If something failed, open that job: every step prints what went wrong."
+          } >> "$GITHUB_STEP_SUMMARY"
+          test "${{ needs.installer.result }}" = "success" -a "${{ needs.page.result }}" = "success" -a "${{ needs.studio.result }}" = "success"

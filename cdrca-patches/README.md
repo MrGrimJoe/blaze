@@ -1,17 +1,18 @@
 # CDRCA changes, as reviewable commits
 
-Made against upstream `ISLAH-org/CDRCA` commit `6b8a742` ("rough sketch for full plugin implementation").
-Apply to a checkout of that commit with `git am cdrca-patches/*.patch`; take, change or drop each one separately.
+Made against upstream `ISLAH-org/CDRCA` commit `6b8a742`. Apply to a checkout of that commit with
+`git am cdrca-patches/*.patch`. Take, change or drop each one separately. Full detail: `docs/CDRCA-CHANGES.md`.
 
-| # | Kind | What |
-|---|---|---|
-| 1 | bug fix | `def ACTION`: each part only drives the prop it names, and several `def ACTION <same name>` lines combine (as `examples/demo_animation.cdrca` shows it is meant to work) |
-| 2 | bug fix | emit the documented default scene options (1000/1000/500/0x000000) when a scene sets none; without them the renderer never leaves its first scene and no action plays. Adds `tests/transpiler.test.js` |
-| 3 | addition | `ImageProp` and `TextProp`, in the same style and place as the existing example props. No new syntax |
-| 4 | addition | `Back-end/Render/render.js`: headless, frame-exact rendering to images/mp4 (stand-alone; only needs playwright to run it) |
-| 5 | docs | README sections for the above |
-| 6 | addition | `render.js --from <sec>` |
-| 7 | bug fix | parser: a negative number in `def ACTION` parameters stays one parameter |
-
-Not changed and not added: the language's syntax, the existing props, the scene/action machinery, the plugin sketch.
-Requests that need the owner's design decisions are in `../docs/CDRCA-PROPOSALS.md`.
+| # | Kind | Change |
+|---|------|--------|
+| 1 | bug fix | `def ACTION` parts only drive the prop they name; same-name lines combine |
+| 2 | bug fix | emit the documented default scene options when a scene sets none (without them no action ever played) |
+| 3 | bug fix | parser: a negative number in `def ACTION` parameters stays one parameter |
+| 4 | bug fix | emit `JS { }` blocks (they were parsed, then dropped) |
+| 5 | bug fix | define `mixClasses` in the renderer (`def PROP` called it, nothing defined it) |
+| 6 | addition | `Back-end/Render/render.js`: headless, frame-exact renderer (playwright + Chromium) |
+| 7 | addition | `render.js --from <sec>` skips the start of the animation |
+| 8 | bug fix | tokenizer/parser keep the spaces in `def PROP` and `JS` bodies |
+| 9 | bug fix | renderer `Scene` copied props exponentially in their number |
+| 10 | addition | `render.js` waits for loads through `THREE.DefaultLoadingManager`; tests use `def PROP` props |
+| 11 | bug fix | transpiler: a header block that only defines things is not a scene (no empty black scenes) |

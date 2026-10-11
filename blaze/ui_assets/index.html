@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blaze</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #ffffff; --ink: #15171a; --mute: #7b808a; --line: #e4e6ea;
+    --accent: #2b44ff; --accent-ink: #ffffff; --bad: #c4301c; --warn: #8a6100; --ok: #1f7a4d;
+    --sans: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", ui-monospace, "SF Mono", Consolas, Menlo, monospace;
+  }
+  :root:not([data-theme="light"]) { }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101114; --panel: #15171b; --ink: #ecedef; --mute: #868b95; --line: #25282e;
+      --accent: #8796ff; --accent-ink: #0d0f14; --bad: #ff8a78; --warn: #e8bd5a; --ok: #6fd4a1;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+  .app { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+  header { display: flex; align-items: center; gap: 20px; padding: 14px clamp(16px, 3vw, 36px); position: relative; }
+  .mark { font-weight: 650; letter-spacing: -0.01em; font-size: 17px; margin-right: auto; }
+  .bar { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: var(--accent); transition: width .5s ease; }
+  .bar.off { opacity: 0; }
+  header label { display: flex; align-items: center; gap: 8px; color: var(--mute); font-size: 14px; }
+  select { appearance: none; background: transparent; border: 0; padding: 6px 4px; cursor: pointer; color: var(--ink); }
+  .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; color: var(--mute); font-size: 14px; }
+  .switch input { appearance: none; width: 30px; height: 18px; border-radius: 99px; background: var(--line); position: relative; cursor: pointer; margin: 0; transition: background .15s; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--panel); transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .switch input:checked { background: var(--accent); }
+  .switch input:checked::after { transform: translateX(12px); }
+  .primary { white-space: nowrap; background: var(--ink); color: var(--bg); border: 0; border-radius: 10px; padding: 9px 18px; font-weight: 600; cursor: pointer; transition: opacity .15s, transform .05s; }
+  .primary:hover { opacity: .88; }
+  .primary:active { transform: translateY(1px); }
+  .primary:disabled { opacity: .35; cursor: default; }
+  .quiet { background: transparent; border: 0; color: var(--mute); cursor: pointer; padding: 4px 2px; }
+  .quiet:hover { color: var(--ink); }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: clamp(16px, 3vw, 44px); padding: 8px clamp(16px, 3vw, 36px) 24px; min-height: 0; }
+  .write { display: flex; flex-direction: column; min-height: 0; max-width: 820px; width: 100%; justify-self: end; }
+  .idea { display: flex; gap: 10px; align-items: center; padding: 0 0 12px; }
+  .idea[hidden] { display: none; }
+  .idea input { flex: 1; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 8px 2px; }
+  .idea input::placeholder { color: var(--mute); }
+  .idea select { flex: 0 0 250px; color: var(--mute); border-bottom: 1px solid var(--line); border-radius: 0; padding: 8px 2px; }
+  textarea { width: 100%; flex: 1; min-height: 0; resize: none; border: 0; background: transparent; font: 15px/1.75 var(--mono); padding: 6px 2px; outline: none; tab-size: 2; caret-color: var(--accent); }
+  textarea:focus-visible { outline: none; }
+  textarea::placeholder { color: var(--mute); opacity: .75; }
+  .status { min-height: 28px; display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--mute); border-top: 1px solid var(--line); padding-top: 10px; }
+  .status .err { color: var(--bad); }
+  .status button { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+  aside { min-width: 0; overflow: auto; padding-top: 4px; }
+  aside h2 { font-size: 13px; font-weight: 600; color: var(--mute); margin: 26px 0 8px; letter-spacing: 0; }
+  aside h2:first-child { margin-top: 4px; }
+  .title { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; margin: 0 0 2px; }
+  .sub { color: var(--mute); margin: 0; }
+  .cast { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; }
+  .scenes { margin: 0; padding: 0; list-style: none; }
+  .scenes li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .scenes li span:last-child { color: var(--mute); white-space: nowrap; }
+  .empty { color: var(--mute); }
+  .notes { margin: 0; padding: 0; list-style: none; color: var(--warn); font-size: 14px; }
+  .notes li { padding: 3px 0; }
+
+  .player { margin: 0 0 6px; }
+  video { width: 100%; border-radius: 10px; background: #000; display: block; }
+  .player .row { display: flex; gap: 16px; align-items: center; margin-top: 10px; }
+  .player a { color: var(--ink); text-underline-offset: 3px; }
+  .player .len { margin-left: auto; color: var(--mute); }
+  .making { color: var(--mute); }
+  .failed { color: var(--bad); }
+
+  details { margin-top: 26px; color: var(--mute); font-size: 14px; }
+  summary { cursor: pointer; list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { color: var(--ink); }
+  pre { margin: 10px 0 0; font: 13px/1.7 var(--mono); white-space: pre-wrap; color: var(--ink); }
+
+  .idea input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+  @media (max-width: 860px) {
+    .app { height: auto; min-height: 100%; }
+    main { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
+    .write { justify-self: stretch; }
+    textarea { flex: none; height: 52vh; min-height: 300px; }
+    .idea { flex-wrap: wrap; }
+    .idea input { flex: 1 1 100%; }
+    .idea select { flex: 1 1 auto; }
+  }
+  @media (max-width: 640px) {
+    header { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "m b" "q v"; gap: 10px 16px; align-items: center; }
+    .mark { grid-area: m; }
+    #make { grid-area: b; }
+    header label:not(.switch) { grid-area: q; }
+    .switch { grid-area: v; justify-self: end; }
+    .idea select { flex: 1 1 100%; max-width: none; }
+    textarea { font-size: 14px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <span class="mark">Blaze</span>
+    <label>Quality
+      <select id="quality" aria-label="Video quality">
+        <option value="fast">Draft · 640×360</option>
+        <option value="standard" selected>Standard · 960×540</option>
+        <option value="hd">HD · 1280×720</option>
+        <option value="full">Full HD · 1920×1080</option>
+      </select>
+    </label>
+    <label class="switch"><input type="checkbox" id="voice" checked aria-label="Voices"> Voices</label>
+    <button class="primary" id="make">Make video</button>
+    <div class="bar off" id="bar" role="progressbar" aria-hidden="true"></div>
+  </header>
+
+  <main>
+    <section class="write">
+      <div class="idea" id="idea" hidden>
+        <input id="ideaText" placeholder="Or describe a story and let the AI write the screenplay" aria-label="Story idea">
+        <select id="ideaMode" aria-label="How much to write" title="A whole story asks the AI once for the plan and once per scene">
+          <option value="quick">Short scene · 1 request</option>
+          <option value="whole">Whole story · about 5 requests</option>
+        </select>
+        <button class="quiet" id="ideaGo">Write it</button>
+        <button class="quiet" id="change" title="Choose a different AI provider">Change provider</button>
+      </div>
+      <div class="idea" id="setup" hidden>
+        <select id="prov" aria-label="AI provider">
+          <option value="">Write with AI: choose a provider</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="gemini">Google Gemini</option>
+          <option value="openai">OpenAI</option>
+        </select>
+        <input id="provKey" type="password" placeholder="Paste your API key" aria-label="API key" autocomplete="off">
+        <button class="quiet" id="provSave">Save</button>
+      </div>
+      <textarea id="text" spellcheck="false" aria-label="Screenplay" placeholder="TITLE: The Lost Key
+CAST: JOHN gender=m coat=1
+CAST: MARY gender=f dress=1
+
+SCENE: street
+BACKDROP: gen:street:night
+JOHN: Did you hear that?
+MARY: It is just the wind.
+[MOVE JOHN 3]"></textarea>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+    </section>
+
+    <aside>
+      <div id="result"></div>
+      <div id="outline"></div>
+      <details>
+        <summary>Screenplay format</summary>
+<pre>TITLE: and SUBTITLE: name the video
+CAST: NAME gender=m|f top=0xd64036 …
+SCENE: a label for you
+BACKDROP: gen:street:night_rain
+NAME: a spoken line
+&gt; a narrator line
+[ENTER NAME 9.5 3]  walk in to x
+[MOVE NAME 0]  [EXIT NAME 9.5]
+[HOP NAME]  [PAUSE 1.5]
+
+Positions are numbers: 0 is the middle,
+about -6.8 to 6.8 is the screen.
+Places: street room warehouse forest
+beach office. Moods: day sunset night
+dim rain storm snow night_rain night_snow.</pre>
+      </details>
+    </aside>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const text = $("text"), status = $("status"), makeBtn = $("make");
+let sample = "", lastCheck = null, timer = null, job = null;
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmt = (s) => s < 60 ? `${Math.max(1, Math.round(s))} sec` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} sec`;
+const post = (url, body) => fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).then((r) => r.json());
+
+function jumpToLine(n) {
+  const lines = text.value.split("\n");
+  let start = 0;
+  for (let i = 0; i < n - 1 && i < lines.length; i++) start += lines[i].length + 1;
+  text.focus();
+  text.setSelectionRange(start, start + (lines[n - 1] || "").length);
+}
+
+function renderStatus(c) {
+  if (!text.value.trim()) { status.innerHTML = `<span>Write a screenplay, or</span> <button class="quiet" id="ex">start from an example</button>`; $("ex").onclick = loadSample; return; }
+  if (!c) { status.textContent = ""; return; }
+  if (!c.ok) {
+    const where = c.line ? ` <button class="quiet" id="goto">Go to line ${c.line}</button>` : "";
+    status.innerHTML = `<span class="err">${esc(c.error)}</span>${where}`;
+    if (c.line) $("goto").onclick = () => jumpToLine(c.line);
+    return;
+  }
+  const n = c.scenes.length, p = c.cast.length;
+  status.textContent = `${n} ${n === 1 ? "scene" : "scenes"} · ${p} ${p === 1 ? "character" : "characters"} · about ${fmt(c.seconds)}`;
+}
+
+function renderOutline(c) {
+  const el = $("outline");
+  if (!c || !c.ok) { el.innerHTML = c ? "" : ""; return; }
+  let h = "";
+  if (c.title) h += `<h2>Story</h2><p class="title">${esc(c.title)}</p>`;
+  h += `<h2>Cast</h2>` + (c.cast.length ? `<ul class="cast">${c.cast.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : `<p class="empty">Nobody speaks yet.</p>`);
+  h += `<h2>Scenes</h2><ul class="scenes">${c.scenes.map((s) => `<li><span>${esc(s.heading)}</span><span>${s.lines} ${s.lines === 1 ? "line" : "lines"}</span></li>`).join("")}</ul>`;
+  if (c.warnings.length) h += `<h2>Heads up</h2><ul class="notes">${c.warnings.map((w) => `<li>Line ${w.line}: ${esc(w.text)}</li>`).join("")}</ul>`;
+  el.innerHTML = h;
+}
+
+function check() {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    store.set("blaze.text", text.value);
+    if (!text.value.trim()) { lastCheck = null; renderStatus(null); renderOutline(null); makeBtn.disabled = true; return; }
+    try { lastCheck = await post("/api/check", { text: text.value }); } catch (e) { return; }
+    renderStatus(lastCheck); renderOutline(lastCheck);
+    makeBtn.disabled = !lastCheck.ok || (job && job.state === "running");
+  }, 250);
+}
+
+function loadSample() { if (!sample) return; text.value = sample; check(); text.focus(); text.setSelectionRange(0, 0); text.scrollTop = 0; }
+
+function setBar(p) { const b = $("bar"); b.classList.toggle("off", p == null); if (p != null) b.style.width = (p * 100) + "%"; }
+
+async function make() {
+  if (makeBtn.disabled) return;
+  makeBtn.disabled = true; makeBtn.textContent = "Making…";
+  $("result").innerHTML = `<p class="making" id="mk">Starting…</p>`; setBar(0.05);
+  let r;
+  try { r = await post("/api/make", { text: text.value, quality: $("quality").value, voice: $("voice").checked ? "auto" : "off" }); }
+  catch (e) { return fail("Blaze could not be reached. Is the terminal still running?"); }
+  if (r.error) return fail(r.error);
+  job = r; poll();
+}
+
+function fail(msg) {
+  $("result").innerHTML = `<p class="failed">${esc(msg)}</p>`;
+  makeBtn.textContent = "Make video"; makeBtn.disabled = !(lastCheck && lastCheck.ok); setBar(null);
+}
+
+async function poll() {
+  let r;
+  try { r = await (await fetch("/api/job/" + job.id)).json(); } catch (e) { return fail("Lost contact with Blaze. Is the terminal still running?"); }
+  job = r;
+  if (r.state === "running") {
+    const m = $("mk"); if (m) m.textContent = r.message + "…";
+    setBar(r.progress); return setTimeout(poll, 700);
+  }
+  makeBtn.textContent = "Make video"; makeBtn.disabled = !(lastCheck && lastCheck.ok); setBar(null);
+  if (r.state === "error") return fail(r.error);
+  const quiet = $("voice").checked && /silent/i.test(r.voice || "") ? ["No voice engine was found, so this video has no sound. See Tutorial 4 to add one."] : [];
+  const all = (r.notes || []).concat(quiet);
+  const notes = all.length ? `<ul class="notes">${all.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : "";
+  $("result").innerHTML = `<div class="player"><video src="${r.video}#t=2" controls playsinline preload="metadata"></video>
+    <div class="row"><a href="${r.video}?download=1" download>Download video</a>${r.srt ? `<a href="${r.srt}?download=1" download>Subtitles</a>` : ""}<span class="len">${fmt(r.seconds)}</span></div>${notes}</div>`;
+}
+
+$("ideaGo").onclick = async () => {
+  const idea = $("ideaText").value.trim(); if (!idea) return;
+  const b = $("ideaGo"); b.textContent = "Writing…"; b.disabled = true;
+  try {
+    const r = await post("/api/ai", { idea, whole: $("ideaMode").value === "whole", scenes: 4 });
+    if (r.error) status.innerHTML = `<span class="err">${esc(r.error)}</span>`;
+    else { text.value = r.text; check(); }
+  } catch (e) { status.innerHTML = `<span class="err">Blaze could not be reached.</span>`; }
+  b.textContent = "Write it"; b.disabled = false;
+};
+function showAi(on) { $("idea").hidden = !on; $("setup").hidden = on; }
+$("change").onclick = () => { $("idea").hidden = true; $("setup").hidden = false; $("prov").focus(); };
+$("provSave").onclick = async () => {
+  const provider = $("prov").value, key = $("provKey").value;
+  const b = $("provSave"); b.disabled = true;
+  try {
+    const r = await post("/api/ai/setup", { provider, key });
+    if (r.error) status.innerHTML = `<span class="err">${esc(r.error)}</span>`;
+    else { $("provKey").value = ""; showAi(true); renderStatus(lastCheck); }
+  } catch (e) { status.innerHTML = `<span class="err">Blaze could not be reached.</span>`; }
+  b.disabled = false;
+};
+$("ideaText").addEventListener("keydown", (e) => { if (e.key === "Enter") $("ideaGo").click(); });
+
+text.addEventListener("input", check);
+makeBtn.onclick = make;
+document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); make(); } });
+for (const id of ["quality", "voice"]) {
+  const el = $(id), saved = store.get("blaze." + id);
+  if (saved !== null) { if (el.type === "checkbox") el.checked = saved === "1"; else el.value = saved; }
+  el.addEventListener("change", () => store.set("blaze." + id, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value));
+}
+
+// Tell Blaze the page is open (the installed app closes itself when the page is closed).
+const ping = () => fetch("/api/ping").catch(() => {});
+ping(); setInterval(ping, 4000);
+addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye", "{}"); } catch (e) {} });
+
+(async () => {
+  try { const s = await (await fetch("/api/status")).json(); sample = s.sample || ""; showAi(!!s.ai); } catch (e) {}
+  text.value = store.get("blaze.text") || "";
+  makeBtn.disabled = true; check(); text.focus();
+})();
+</script>
+</body>
+</html>

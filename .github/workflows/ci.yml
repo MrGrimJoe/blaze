@@ -1,0 +1,134 @@
+# Tests, on every push and pull request. Anything that cannot be tested on the machine where the code was written runs here:
+# Windows and macOS, the real voice engine of each system, Blender, the documentation, the licence.
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  blaze:
+    name: Blaze on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      BLAZE_REQUIRE_VOICE: "1"          # a missing voice engine fails the build instead of being skipped
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng libegl1 libgl1 libxkbcommon0 libdbus-1-3
+      - name: Tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg espeak-ng
+      - name: Tools (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+
+      - name: Python packages
+        run: |
+          pip install -r requirements.txt pytest PyQt6 pyyaml pydantic requests
+          if [ "$RUNNER_OS" = "Windows" ]; then pip install pyttsx3; fi
+      - name: The renderer's browser
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          if [ "$RUNNER_OS" = "Linux" ]; then npx playwright install --with-deps chromium; else npx playwright install chromium; fi
+
+      - run: python blaze.py doctor
+      - name: Blaze's tests (real renders, voices, the page's server, the launcher)
+        run: python -m pytest tests -v -rs
+      - name: CDRCA's tests
+        working-directory: cdrca
+        run: |
+          node tests/transpiler.test.js
+          node tests/render.test.js
+
+  studio:
+    name: Desktop studio on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Qt system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libdbus-1-3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: "ffmpeg and the browser the offline demo renders with (Linux only; the window's real end-to-end tests run here)"
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y ffmpeg
+          cd cdrca && npm install --no-save playwright && npx playwright install --with-deps chromium
+      - run: pip install -r studio/requirements.txt transformers diffusers
+      - name: The studio's tests (the main window, the whole offline run, providers, orchestrator)
+        run: python -m pytest tests -v -rs
+        working-directory: studio
+
+  blender:
+    name: Blender characters and backdrops
+    runs-on: ubuntu-latest
+    env:
+      BLAZE_REQUIRE_BLENDER: "1"        # the Blender tests must run here, not be skipped
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: sudo apt-get update && sudo apt-get install -y blender ffmpeg espeak-ng
+      - run: pip install -r requirements.txt pytest
+      - name: The renderer's browser
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - run: python -m pytest tests/test_blender.py -v -rs
+
+  docs-and-licence:
+    name: Documentation and licence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Links work and every screenplay shown in the docs parses
+        run: python tools/check_docs.py
+      - name: The repository licence is the CDRCA one
+        run: cmp LICENSE.md cdrca/LICENSE.md
+      - name: Compare with the licence in the live CDRCA repository
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/ISLAH-org/CDRCA/main/LICENSE.md -o /tmp/upstream-LICENSE.md || { echo "::warning::could not fetch the upstream licence"; exit 0; }
+          if cmp -s LICENSE.md /tmp/upstream-LICENSE.md; then echo "identical to ISLAH-org/CDRCA main"; else echo "::warning::LICENSE.md differs from ISLAH-org/CDRCA main: update cdrca/ and LICENSE.md"; fi

@@ -469,7 +469,7 @@ const parserConstructor = function (defaultTokenizer, pluginAPI) {
         throw new Error("Unclosed plugin definition block");
       }
 
-      const body = bodyTokens.map((t) => t.value).join("");
+      const body = joinCode(bodyTokens);
       return {
         type: "PLUGIN_DEF",
         prams: {
@@ -499,6 +499,12 @@ const parserConstructor = function (defaultTokenizer, pluginAPI) {
       return { type, prams: { values: Array.from(new Set(values)) }, newPosition: pos };
     }
 
+    // Code captured from a { ... } body: put the tokens back together, keeping a space wherever the source had one
+    // (joining with "" turned 'const word of x' into 'constwordofx').
+    function joinCode(tokens) {
+      return tokens.map((t) => (t.spaceBefore ? " " : "") + t.value).join("");
+    }
+
     function parseImport(tokens, pos, type) {
       // console.log(type);
       pos++;
@@ -524,7 +530,7 @@ const parserConstructor = function (defaultTokenizer, pluginAPI) {
         pos++;
       }
       if (depth !== 0) throw new Error("Unclosed JS block");
-      const code = codeTokens.map((t) => t.value).join("");
+      const code = joinCode(codeTokens);
       return { type: "JS_BLOCK", prams: { code }, newPosition: pos };
     }
 
@@ -575,7 +581,7 @@ const parserConstructor = function (defaultTokenizer, pluginAPI) {
         pos++;
       }
       if (depth !== 0) throw new Error("Unclosed prop definition");
-      const code = codeTokens.map((t) => t.value).join("");
+      const code = joinCode(codeTokens);
       return {
         type: "PROP_DEF",
         prams: { name, abstracts, optionOtherPROP, code },
