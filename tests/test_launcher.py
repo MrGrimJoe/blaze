@@ -7,6 +7,7 @@ import sys
 import threading
 import time
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -189,6 +190,20 @@ def test_blaze_studio_opens_and_makes_the_offline_demo_through_its_window(tmp_pa
     pytest.importorskip("PyQt6.QtWidgets")
     env = dict(os.environ, QT_QPA_PLATFORM="offscreen", HOME=str(tmp_path), USERPROFILE=str(tmp_path),
                APPDATA=str(tmp_path / "ad"), LOCALAPPDATA=str(tmp_path / "ld"))
+    # Running from source (no runtime/browsers/, which only an installed copy has),
+    # launcher.prepare() leaves PLAYWRIGHT_BROWSERS_PATH alone -- Playwright falls
+    # through to its own default (documented, OS-specific) cache location. HOME/
+    # USERPROFILE are overridden above (to sandbox the app's own config/videos/
+    # library), which hides that default from this subprocess too, as a side
+    # effect. Pin it explicitly to wherever it actually resolves under the *real*
+    # home, so the browsers CI already installed stay visible either way.
+    if sys.platform == "win32":
+        default_cache = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "ms-playwright"
+    elif sys.platform == "darwin":
+        default_cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+    else:
+        default_cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "ms-playwright"
+    env.setdefault("PLAYWRIGHT_BROWSERS_PATH", os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or str(default_cache))
     r = subprocess.run([sys.executable, str(ui.REPO / "studio_app.pyw"), "--selftest"], capture_output=True, text=True, env=env, timeout=400)
     assert r.returncode == 0, r.stdout[-600:] + r.stderr[-600:]
     out = json.loads(r.stdout[r.stdout.index("{"):])
