@@ -1,0 +1,86 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\a\blaze\blaze
+configfile: pytest.ini
+collected 158 items
+
+tests\test_ai_animation.py ................                              [ 10%]
+tests\test_blaze.py ..........................s..............F           [ 36%]
+tests\test_blender.py .ss.........sssssss                                [ 48%]
+tests\test_installer_and_workflows.py .................................. [ 70%]
+.                                                                        [ 70%]
+tests\test_launcher.py ...............                                   [ 80%]
+tests\test_license.py ....                                               [ 82%]
+tests\test_ui.py .....................                                   [ 96%]
+tests\test_voice_engines.py sFsF..                                       [100%]
+
+================================== FAILURES ===================================
+____________________________ test_end_to_end_video ____________________________
+
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_end_to_end_video0')
+
+    @needs_render
+    def test_end_to_end_video(tmp_path):
+        text = ("TITLE: Hi\nCAST: A gender=f coat=1 top=0xd64036\nSCENE: street\nBACKDROP: gen:street:night_rain\n"
+                "A: Hello there.\n[ENTER B 9.5 2]\nB: Hi!\n")
+        opts = Options(width=320, height=180, fps=8, voice="off", workers=2, progress=lambda m: None)
+        res = make(text, tmp_path / "out.mp4", opts)
+        assert res.video.exists() and res.srt.exists() and (res.project / "scenes" / "s01.cdrca").exists()
+        dur = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(res.video)]).decode())
+        assert abs(dur - res.duration) < 0.6
+        streams = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(res.video)]).decode().split()
+>       assert "video" in streams and "audio" in streams
+E       AssertionError: assert ('video' in ['video,', 'audio'])
+
+tests\test_blaze.py:299: AssertionError
+_________ test_the_engine_speaks_and_the_length_is_measured[pyttsx3] __________
+
+mode = 'pyttsx3'
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_the_engine_speaks_and_the1')
+
+    @pytest.mark.parametrize("mode", ["espeak", "pyttsx3"])
+    def test_the_engine_speaks_and_the_length_is_measured(mode, tmp_path):
+        v = engine_or_skip(mode)
+        out = tmp_path / "line.wav"
+        seconds = v.synth("Hello there. This is a test.", voice.profile_for("Ana", "f"), out)
+>       assert out.exists() and out.stat().st_size > 2000
+E       AssertionError: assert (True and 78 > 2000)
+E        +  where True = exists()
+E        +    where exists = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_the_engine_speaks_and_the1/line.wav').exists
+E        +  and   78 = os.stat_result(st_mode=33206, st_ino=281474978078391, st_dev=17594508763472084922, st_nlink=1, st_uid=0, st_gid=0, st_size=78, st_atime=1791788884, st_mtime=1791788884, st_ctime=1791788884).st_size
+E        +    where os.stat_result(st_mode=33206, st_ino=281474978078391, st_dev=17594508763472084922, st_nlink=1, st_uid=0, st_gid=0, st_size=78, st_atime=1791788884, st_mtime=1791788884, st_ctime=1791788884) = stat()
+E        +      where stat = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_the_engine_speaks_and_the1/line.wav').stat
+
+tests\test_voice_engines.py:21: AssertionError
+_________ test_two_characters_get_different_voices_or_pitch[pyttsx3] __________
+
+mode = 'pyttsx3'
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_two_characters_get_differ1')
+
+    @pytest.mark.parametrize("mode", ["espeak", "pyttsx3"])
+    def test_two_characters_get_different_voices_or_pitch(mode, tmp_path):
+        v = engine_or_skip(mode)
+        a, b = tmp_path / "a.wav", tmp_path / "b.wav"
+        v.synth("Good morning everyone.", voice.profile_for("Ana", "f"), a)
+        v.synth("Good morning everyone.", voice.profile_for("Ben", "m", child=False), b)
+>       assert a.read_bytes() != b.read_bytes()
+E       assert b'RIFFF\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"V\x00\x00D\xac\x00\x00\x02\x00\x10\x00LIST\x1a\x00\x00\x00INFOISFT\r\x00\x00\x00Lavf63.1.102\x00\x00data\x00\x00\x00\x00' != b'RIFFF\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"V\x00\x00D\xac\x00\x00\x02\x00\x10\x00LIST\x1a\x00\x00\x00INFOISFT\r\x00\x00\x00Lavf63.1.102\x00\x00data\x00\x00\x00\x00'
+E        +  where b'RIFFF\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"V\x00\x00D\xac\x00\x00\x02\x00\x10\x00LIST\x1a\x00\x00\x00INFOISFT\r\x00\x00\x00Lavf63.1.102\x00\x00data\x00\x00\x00\x00' = read_bytes()
+E        +    where read_bytes = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_two_characters_get_differ1/a.wav').read_bytes
+E        +  and   b'RIFFF\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00"V\x00\x00D\xac\x00\x00\x02\x00\x10\x00LIST\x1a\x00\x00\x00INFOISFT\r\x00\x00\x00Lavf63.1.102\x00\x00data\x00\x00\x00\x00' = read_bytes()
+E        +    where read_bytes = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_two_characters_get_differ1/b.wav').read_bytes
+
+tests\test_voice_engines.py:32: AssertionError
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_blaze.py:130: espeak-ng/ffmpeg missing
+SKIPPED [1] tests\test_blender.py:37: fake executable is a shell script
+SKIPPED [1] tests\test_blender.py:45: fake executable is a shell script
+SKIPPED [1] tests\test_blender.py:131: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:136: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:147: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:151: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:155: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:161: needs Blender + the renderer
+SKIPPED [1] tests\test_blender.py:177: CI sets BLAZE_REQUIRE_BLENDER so a missing Blender fails the build
+SKIPPED [2] tests\test_voice_engines.py:13: espeak is not available here
+================= 3 failed, 143 passed, 12 skipped in 52.78s ==================
