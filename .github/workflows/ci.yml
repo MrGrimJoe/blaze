@@ -11,6 +11,9 @@ concurrency:
   group: tests-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   blaze:
     name: Blaze on ${{ matrix.os }}
@@ -56,7 +59,31 @@ jobs:
 
       - run: python blaze.py doctor
       - name: Blaze's tests (real renders, voices, the page's server, the launcher)
-        run: python -m pytest tests -v -rs
+        id: blaze_tests
+        continue-on-error: true
+        run: python -m pytest tests -v -rs 2>&1 | tee pytest_output.log
+
+      - name: Commit pytest log on failure (self-diagnosing)
+        if: steps.blaze_tests.outcome == 'failure'
+        run: |
+          # Branch per matrix.os -- this job runs ubuntu/windows/macos
+          # concurrently, and a shared branch name would race (confirmed
+          # the hard way on cdrca-ready-for-the-real-world's ci.yml: only
+          # 1 of 4 concurrent logs survived until each got its own branch).
+          LOG_BRANCH="ci-debug-logs-${{ matrix.os }}"
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin "$LOG_BRANCH" 2>/dev/null || true
+          git checkout -B "$LOG_BRANCH"
+          cp pytest_output.log "pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git add -f "pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git commit -m "CI debug log: pytest failure on ${{ matrix.os }}, run ${GITHUB_RUN_NUMBER}"
+          git push origin "$LOG_BRANCH" --force
+
+      - name: Fail the job if the tests actually failed
+        if: steps.blaze_tests.outcome == 'failure'
+        run: exit 1
+
       - name: CDRCA's tests
         working-directory: cdrca
         run: |
