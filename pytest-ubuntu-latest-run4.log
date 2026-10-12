@@ -1,0 +1,55 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/blaze/blaze
+configfile: pytest.ini
+collected 158 items
+
+tests/test_ai_animation.py ................                              [ 10%]
+tests/test_blaze.py ..........................................           [ 36%]
+tests/test_blender.py ............sssssss                                [ 48%]
+tests/test_installer_and_workflows.py .................................. [ 70%]
+.                                                                        [ 70%]
+tests/test_launcher.py ..............F                                   [ 80%]
+tests/test_license.py ....                                               [ 82%]
+tests/test_ui.py .....................                                   [ 96%]
+tests/test_voice_engines.py .s.s..                                       [100%]
+
+=================================== FAILURES ===================================
+____ test_blaze_studio_opens_and_makes_the_offline_demo_through_its_window _____
+
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_blaze_studio_opens_and_ma0')
+
+    @pytest.mark.skipif(not _can_render(), reason="needs node + playwright + ffmpeg")
+    def test_blaze_studio_opens_and_makes_the_offline_demo_through_its_window(tmp_path):
+        """What the installer's Blaze Studio shortcut ships, run the same way (the studio launcher, off-screen)."""
+        pytest.importorskip("PyQt6.QtWidgets")
+        env = dict(os.environ, QT_QPA_PLATFORM="offscreen", HOME=str(tmp_path), USERPROFILE=str(tmp_path),
+                   APPDATA=str(tmp_path / "ad"), LOCALAPPDATA=str(tmp_path / "ld"))
+        r = subprocess.run([sys.executable, str(ui.REPO / "studio_app.pyw"), "--selftest"], capture_output=True, text=True, env=env, timeout=400)
+>       assert r.returncode == 0, r.stdout[-600:] + r.stderr[-600:]
+E       AssertionError:                                    \u2551\n\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\n    at main (/home/runner/work/blaze/blaze/cdrca/Back-end/Render/render.js:103:34)\n    at Object.<anonymous> (/home/runner/work/blaze/blaze/cdrca/Back-end/Render/render.js:170:1)"
+E         }
+E         ght was just installed or updated.       ║
+E         ║ Please run the following command to download new browsers: ║
+E         ║                                                            ║
+E         ║     npx playwright install                                 ║
+E         ║                                                            ║
+E         ║ <3 Playwright Team                                         ║
+E         ╚════════════════════════════════════════════════════════════╝
+E             at main (/home/runner/work/blaze/blaze/cdrca/Back-end/Render/render.js:103:34)
+E             at Object.<anonymous> (/home/runner/work/blaze/blaze/cdrca/Back-end/Render/render.js:170:1)
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/opt/hostedtoolcache/Python/3.12.15/x64/bin/python', '/home/runner/work/blaze/blaze/studio_app.../render.js:103:34)\n    at Object.<anonymous> (/home/runner/work/blaze/blaze/cdrca/Back-end/Render/render.js:170:1)\n").returncode
+
+tests/test_launcher.py:193: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_blender.py:131: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:136: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:147: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:151: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:155: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:161: needs Blender + the renderer
+SKIPPED [1] tests/test_blender.py:177: CI sets BLAZE_REQUIRE_BLENDER so a missing Blender fails the build
+SKIPPED [2] tests/test_voice_engines.py:13: pyttsx3 is not available here
+================== 1 failed, 148 passed, 9 skipped in 23.88s ===================
