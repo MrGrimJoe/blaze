@@ -1,0 +1,45 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.12.10, pytest-9.1.1, pluggy-1.6.0
+rootdir: /Users/runner/work/blaze/blaze
+configfile: pytest.ini
+collected 158 items
+
+tests/test_ai_animation.py ................                              [ 10%]
+tests/test_blaze.py .........................................F           [ 36%]
+tests/test_blender.py ............sssssss                                [ 48%]
+tests/test_installer_and_workflows.py .................................. [ 70%]
+.                                                                        [ 70%]
+tests/test_launcher.py ...............                                   [ 80%]
+tests/test_license.py ....                                               [ 82%]
+tests/test_ui.py .....................                                   [ 96%]
+tests/test_voice_engines.py .s.s..                                       [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_end_to_end_video _____________________________
+
+tmp_path = PosixPath('/private/var/folders/36/tjdph2t965j8snz9_vkdnw0r0000gn/T/pytest-of-runner/pytest-0/test_end_to_end_video0')
+
+    @needs_render
+    def test_end_to_end_video(tmp_path):
+        text = ("TITLE: Hi\nCAST: A gender=f coat=1 top=0xd64036\nSCENE: street\nBACKDROP: gen:street:night_rain\n"
+                "A: Hello there.\n[ENTER B 9.5 2]\nB: Hi!\n")
+        opts = Options(width=320, height=180, fps=8, voice="off", workers=2, progress=lambda m: None)
+        res = make(text, tmp_path / "out.mp4", opts)
+        assert res.video.exists() and res.srt.exists() and (res.project / "scenes" / "s01.cdrca").exists()
+        dur = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(res.video)]).decode())
+        assert abs(dur - res.duration) < 0.6
+        streams = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(res.video)]).decode().split()
+>       assert "video" in streams and "audio" in streams
+E       AssertionError: assert ('video' in ['video,', 'audio'])
+
+tests/test_blaze.py:299: AssertionError
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_blender.py:131: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:136: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:147: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:151: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:155: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests/test_blender.py:161: needs Blender + the renderer
+SKIPPED [1] tests/test_blender.py:177: CI sets BLAZE_REQUIRE_BLENDER so a missing Blender fails the build
+SKIPPED [2] tests/test_voice_engines.py:13: pyttsx3 is not available here
+============= 1 failed, 148 passed, 9 skipped in 80.84s (0:01:20) ==============
