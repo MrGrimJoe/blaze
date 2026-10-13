@@ -117,8 +117,27 @@ jobs:
           cd cdrca && npm install --no-save playwright && npx playwright install --with-deps chromium
       - run: pip install -r studio/requirements.txt transformers diffusers
       - name: The studio's tests (the main window, the whole offline run, providers, orchestrator)
-        run: python -m pytest tests -v -rs
+        id: studio_tests
+        continue-on-error: true
         working-directory: studio
+        run: python -m pytest tests -v -rs 2>&1 | tee ../studio_pytest_output.log
+
+      - name: Commit studio pytest log on failure (self-diagnosing)
+        if: steps.studio_tests.outcome == 'failure'
+        run: |
+          LOG_BRANCH="ci-debug-logs-studio-${{ matrix.os }}"
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin "$LOG_BRANCH" 2>/dev/null || true
+          git checkout -B "$LOG_BRANCH"
+          cp studio_pytest_output.log "studio-pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git add -f "studio-pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git commit -m "CI debug log: studio pytest failure on ${{ matrix.os }}, run ${GITHUB_RUN_NUMBER}"
+          git push origin "$LOG_BRANCH" --force
+
+      - name: Fail the job if the studio's tests actually failed
+        if: steps.studio_tests.outcome == 'failure'
+        run: exit 1
 
   blender:
     name: Blender characters and backdrops
@@ -140,7 +159,26 @@ jobs:
         run: |
           npm install --no-save playwright
           npx playwright install --with-deps chromium
-      - run: python -m pytest tests/test_blender.py -v -rs
+      - name: Blender tests
+        id: blender_tests
+        continue-on-error: true
+        run: python -m pytest tests/test_blender.py -v -rs 2>&1 | tee blender_pytest_output.log
+
+      - name: Commit blender pytest log on failure (self-diagnosing)
+        if: steps.blender_tests.outcome == 'failure'
+        run: |
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin ci-debug-logs-blender 2>/dev/null || true
+          git checkout -B ci-debug-logs-blender
+          cp blender_pytest_output.log "blender-pytest-run${GITHUB_RUN_NUMBER}.log"
+          git add -f "blender-pytest-run${GITHUB_RUN_NUMBER}.log"
+          git commit -m "CI debug log: blender pytest failure, run ${GITHUB_RUN_NUMBER}"
+          git push origin ci-debug-logs-blender --force
+
+      - name: Fail the job if the blender tests actually failed
+        if: steps.blender_tests.outcome == 'failure'
+        run: exit 1
 
   docs-and-licence:
     name: Documentation and licence

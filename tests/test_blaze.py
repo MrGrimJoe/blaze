@@ -295,7 +295,11 @@ def test_end_to_end_video(tmp_path):
     assert res.video.exists() and res.srt.exists() and (res.project / "scenes" / "s01.cdrca").exists()
     dur = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(res.video)]).decode())
     assert abs(dur - res.duration) < 0.6
-    streams = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(res.video)]).decode().split()
+    streams_raw = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(res.video)]).decode().split()
+    # csv=p=0 adds a trailing comma on some ffmpeg builds (confirmed: not on Ubuntu's
+    # apt ffmpeg 6.1.1, but does on macOS/Windows CI runners' builds) -- strip it so
+    # this doesn't depend on exactly which ffmpeg build is on PATH.
+    streams = [s.rstrip(",") for s in streams_raw]
     assert "video" in streams and "audio" in streams
     # one second in, the scene must show content (regression: empty scenes from the library's header blocks made it black
     # for seconds). Frame 0 itself is black on purpose of the renderer: every scene fades in over ~0.3 s.

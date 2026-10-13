@@ -99,8 +99,13 @@ class Pyttsx3Voice:
         engine.save_to_file(text, str(raw))
         engine.runAndWait()
         engine.stop()
-        if not raw.exists():
-            raise RuntimeError("pyttsx3 produced no audio")
+        if not raw.exists() or wav_seconds(raw) <= 0:
+            raise RuntimeError(
+                "pyttsx3 produced no audio (file exists but has zero frames -- "
+                "on Windows this usually means no SAPI voice is installed on "
+                "this machine; engine.getProperty('voices') returned "
+                f"{len(voices)} voice(s))"
+            )
         _normalise(raw, out_wav)
         raw.unlink(missing_ok=True)
         return wav_seconds(out_wav)
