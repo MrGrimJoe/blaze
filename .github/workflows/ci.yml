@@ -118,6 +118,9 @@ jobs:
         run: |
           sudo apt-get install -y ffmpeg
           cd cdrca && npm install --no-save playwright && npx playwright install --with-deps chromium
+      - name: ffmpeg (Windows -- VideoAssembler's tests need it here too, just not the browser)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
       - run: pip install -r studio/requirements.txt transformers diffusers
       - name: The studio's tests (the main window, the whole offline run, providers, orchestrator)
         id: studio_tests

@@ -55,7 +55,11 @@ class TestComposeShot:
         shot = Shot(shot_id="shot_001", scene_description="x", characters=["detective"])
         scene_path = composer.compose_shot(shot, {"detective": dummy_asset})
         content = scene_path.read_text()
-        assert str(dummy_asset) in content
+        # Not the raw path -- the composer escapes backslashes/quotes for GDScript
+        # string-literal syntax (necessary on Windows; a no-op on POSIX paths,
+        # which is why checking the raw path only happened to pass there).
+        escaped_path = str(dummy_asset).replace("\\", "\\\\").replace('"', '\\"')
+        assert escaped_path in content
         assert "Image.new()" in content
         assert "ImageTexture.create_from_image" in content
 
