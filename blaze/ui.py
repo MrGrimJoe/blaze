@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from .pipeline import REPO, BlazeError, Options, make
-from .screenplay import ScreenplayError, parse
+from . import voice as voice_mod
+from .screenplay import ScreenplayError, cast_label, parse
 from .voice import estimate_seconds
 
 ASSETS = Path(__file__).resolve().parent / "ui_assets"
@@ -80,6 +81,7 @@ class App:
         self.workdir = workdir
         self.library = library
         self.jobs: Dict[str, Job] = {}
+        self._voices: Optional[list] = None
         self.lock = threading.Lock()
         self.busy: Optional[str] = None
         self.started = time.time()
@@ -124,8 +126,36 @@ class App:
         for w in sp.warnings:
             m = re.match(r"line (\d+): (.*)", w)
             warnings.append({"line": int(m.group(1)) if m else 0, "text": m.group(2) if m else w})
+        people = sp.characters() + (["Narrator"] if any(b.kind == "narr" for sc in sp.scenes for b in sc.beats) and "Narrator" not in sp.characters() else [])
+        voices = {c: {"label": cast_label(c), "voice": sp.speech.get(c, {}).get("voice", "auto"), "rate": sp.speech.get(c, {}).get("rate", 0),
+                      "pitch": sp.speech.get(c, {}).get("pitch", -1)} for c in people}
         return {"ok": True, "title": sp.title, "cast": sp.characters(), "scenes": scenes, "warnings": warnings,
-                "seconds": round(seconds + 3.2)}
+                "seconds": round(seconds + 3.2), "voices": voices, "looks": sorted(sp.looks)}
+
+    # ------------------------------------------------------------------ voices
+    def voices(self) -> dict:
+        """The engines and voices installed on this computer (listing them can be slow, so it is done once)."""
+        if self._voices is None:
+            self._voices = voice_mod.engines_info()
+        return {"engines": self._voices}
+
+    def preview(self, spec: str, text: str, gender: str, rate: int, pitch: int) -> dict:
+        """Speak a sample line with one voice and return where the page can play it."""
+        import hashlib
+        text = (text or "Hello there. This is how I sound.").strip()[:200]
+        try:
+            spec = voice_mod.check_spec(spec)
+            key = hashlib.sha1(json.dumps([spec, text, gender, rate, pitch]).encode("utf-8")).hexdigest()[:16]
+            out = self.workdir / "previews" / f"{key}.wav"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            seconds = 0.0
+            if out.exists():
+                seconds = voice_mod.wav_seconds(out)
+            else:
+                seconds = voice_mod.preview(text, spec, out, gender=gender if gender in ("m", "f") else "m", rate=rate, pitch=pitch)
+        except (ValueError, RuntimeError) as e:
+            return {"error": str(e)}
+        return {"url": f"/preview/{key}.wav", "seconds": round(seconds, 1)}
 
     # ------------------------------------------------------------------ making
     def start(self, text: str, quality: str, voice: str) -> dict:
@@ -254,6 +284,11 @@ def make_handler(app: App):
                 return self._json({"ok": True})
             if path == "/api/status":
                 return self._json({"ai": app.ai_available(), "provider": app.ai_provider(), "sample": SAMPLE.read_text(encoding="utf-8") if SAMPLE.exists() else ""})
+            if path == "/api/voices":
+                return self._json(app.voices())
+            m = re.fullmatch(r"/preview/([0-9a-f]{16})\.wav", path)
+            if m:
+                return self._file(app.workdir / "previews" / f"{m.group(1)}.wav", "audio/wav")
             m = re.fullmatch(r"/api/job/(\w+)", path)
             if m:
                 job = app.jobs.get(m.group(1))
@@ -274,6 +309,15 @@ def make_handler(app: App):
                 return self._json({"ok": True})
             if self.path == "/api/check":
                 return self._json(app.check(str(data.get("text", ""))))
+            if self.path == "/api/voice-preview":
+                def whole(k, default):
+                    try:
+                        return int(data.get(k, default))
+                    except (TypeError, ValueError):
+                        return default
+                r = app.preview(str(data.get("voice", "")), str(data.get("text", "")), str(data.get("gender", "m")),
+                                whole("rate", 0), whole("pitch", -1))
+                return self._json(r, 400 if "error" in r else 200)
             if self.path == "/api/make":
                 r = app.start(str(data.get("text", "")), str(data.get("quality", "standard")), str(data.get("voice", "auto")))
                 return self._json(r, 409 if "error" in r else 200)

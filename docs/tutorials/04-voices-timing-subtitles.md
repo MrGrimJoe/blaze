@@ -6,15 +6,31 @@ Blaze speaks every line with a text-to-speech engine installed on your computer.
 
 | Engine | Where | Notes |
 |---|---|---|
-| **espeak-ng** | Linux, macOS, Windows (github.com/espeak-ng/espeak-ng) | Used first when it is on your PATH. Clear but robotic. |
+| **espeak-ng** (`espeak`) | Linux, macOS, Windows (github.com/espeak-ng/espeak-ng) | Used first when it is on your PATH. Clear but robotic. Many languages, plus voice variants such as `en-us+m3` or `en-gb+f2`. |
 | **pyttsx3** | `pip install pyttsx3` | Uses the system voices on Windows (SAPI) and macOS. Used when espeak-ng is missing. |
+| **Piper** (`piper`) | the `piper` program on your PATH | Offline neural voices, far more natural. You download the models you like (`.onnx` and `.onnx.json`) into `library/voices`, `~/.blaze/voices` or the folder in `$BLAZE_VOICES`. |
 
-`python blaze.py doctor` shows whether one was found. Choose with `--voice auto|espeak|pyttsx3|off` (`auto` is the
-default; in the page the **Voices** switch is `auto` or `off`).
+`python blaze.py doctor` shows whether one was found. `--voice auto|espeak|pyttsx3|piper|off` chooses the engine for characters who
+do not ask for one (`auto` is the default; in the page the **Voices** switch is `auto` or `off`).
 
-**Each character has their own stable voice.** It depends on their name, so the same name always sounds the same, and on
-their look: `gender=f` and `gender=m` use different voices, and `child=1` raises the pitch. The narrator (`>` lines) has a
-voice of its own. Characters you did not give a `gender` get one picked from their name.
+**Choose a voice for each character.** Put it on their `CAST:` line, together with an optional speed and pitch:
+
+```
+CAST: JOHN gender=m voice=espeak:en-gb+m3 rate=140
+CAST: MARY gender=f voice=espeak:en-us+f2 pitch=70
+CAST: Narrator voice=off
+```
+
+`voice=` is `<engine>:<voice>`, `auto`, or `off` for a silent character (their text is still shown and subtitled). `rate` is words
+per minute for that character and `pitch` is 0 to 99 (espeak only). `python blaze.py voices` lists everything installed, and
+`python blaze.py voices --voice espeak:en-gb+f2 --say "Hello"` writes a sample you can listen to before you decide. In the
+page, every character in the outline has a drop-down, a **Play** button and a speed box; choosing a voice writes it into that
+character's `CAST:` line, so the screenplay stays the one place that says how the video sounds. If a chosen voice is not
+installed, Blaze stops before drawing anything and says what to install.
+
+**Without a `voice=`,** each character has their own stable voice. It depends on their name, so the same name always sounds the
+same, and on their look: `gender=f` and `gender=m` use different voices, and `child=1` raises the pitch. The narrator (`>` lines)
+has a voice of its own. Characters you did not give a `gender` get one picked from their name.
 
 **Speed.** `--wpm` is words per minute, default 150. About 105 is slow and clear, which suits language learners:
 

@@ -1,0 +1,24 @@
+TITLE: Looks and Voices
+SUBTITLE: text looks, and a pace for each character
+# Each character can have a speed of their own. rate (words per minute) works with every voice engine.
+CAST: JOHN gender=m coat=1 hat=fedora rate=140
+CAST: MARY gender=f dress=1 rate=165
+CAST: Narrator rate=120
+# To choose a voice, add voice=<engine>:<voice> to a CAST line. What is installed on your computer: python blaze.py voices
+# For example:  CAST: JOHN gender=m coat=1 hat=fedora voice=espeak:en-gb+m3 rate=140
+
+# A look is a name for a bundle of exact numbers. Define it once, use it on any line.
+DEFINE LOOK shout base=bubble size=0.55 wrap=7 fill=0xfff3b0 ink=0xc0141e border=0xc0141e border_w=0.07
+DEFINE LOOK sign x=-4.6 y=3.5 ax=0 ay=1 size=0.34 wrap=3.2 fill=0x20242c ink=0xffd166 border=0xffd166 border_w=0.05 tail=0 clamp=0
+DEFINE LOOK whisper base=bubble size=0.24 alpha=0.7 ink=0x4a4f5c
+
+SCENE: street at night
+BACKDROP: gen:street:night
+> The street was quiet. Too quiet.
+JOHN: Did you hear that?
+MARY (look=whisper): It is just the wind.
+SPEAK JOHN "STOP RIGHT THERE!" look=shout
+NARRATE "A sign flickered above the door." look=sign
+MARY (look=none): (She says this out loud, but nothing is drawn.)
+[MOVE JOHN 3]
+JOHN: Wind does not knock over boxes.

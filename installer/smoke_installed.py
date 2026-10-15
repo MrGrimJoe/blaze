@@ -107,6 +107,30 @@ def main(argv=None) -> int:
         s, r, _ = call(base, "/api/check", {"text": "A: hi\n[ENTER A left]"})
         check("a mistake is reported with its line", s == 200 and r.get("ok") is False and r.get("line") == 2)
 
+        s, r, _ = call(base, "/api/check", {"text": "JOHN: hi\nLater that day: Mary went home\n"})
+        check("an undeclared speaker is refused, not turned into a character", s == 200 and r.get("ok") is False and r.get("line") == 2, str(r.get("error", ""))[:80])
+        s, r, _ = call(base, "/api/check", {"text": "JOHN: hi\n[MOV JOHN 3]\n"})
+        check("a misspelt command is refused with a suggestion", s == 200 and r.get("ok") is False and "did you mean MOVE" in str(r.get("error", "")))
+
+        # voices: the installed app must offer the system voices (Windows SAPI), play one, and use one for a character
+        s, r, _ = call(base, "/api/voices")
+        engines = {e["engine"]: e for e in r.get("engines", [])} if s == 200 and isinstance(r, dict) else {}
+        pick = ""
+        for name in (("pyttsx3", "espeak", "piper") if sys.platform == "win32" else ("espeak", "pyttsx3", "piper")):
+            if engines.get(name, {}).get("voices"):
+                pick = engines[name]["voices"][0]["id"]
+                break
+        if sys.platform == "win32":
+            sapi = engines.get("pyttsx3", {})
+            check("the system (SAPI) voices are listed", bool(sapi.get("available")) and len(sapi.get("voices", [])) >= 1, f"{len(sapi.get('voices', []))} voice(s)")
+        if pick:
+            s, r, _ = call(base, "/api/voice-preview", {"voice": pick, "text": "Testing one two three."})
+            ok = s == 200 and "url" in r
+            body = call(base, r["url"])[1] if ok else b""
+            check("a chosen voice can be previewed", ok and body[:4] == b"RIFF" and len(body) > 2000, f"{pick}: {len(body)} bytes" if ok else str(r)[:100])
+        else:
+            print("  (no voice engine on this machine: the voice checks are skipped)")
+
         cfg = Path(where.get("config", ""))
         s, r, _ = call(base, "/api/ai/setup", {"provider": "bogus", "key": "x"})
         check("an unknown provider is refused", s == 400)
@@ -137,6 +161,27 @@ def main(argv=None) -> int:
             videos = Path(where.get("videos", ""))
             found = list(videos.glob("*/video.mp4"))
             check("the video is in the person's Videos\\Blaze folder", bool(found) and found[0].stat().st_size > 10_000, str(videos))
+
+        demo = app_dir / "examples" / "looks-and-voices.txt"
+        if demo.is_file():
+            print("Making a video with text looks and a chosen voice per character:")
+            text = demo.read_text(encoding="utf-8")
+            if pick:
+                text = text.replace("CAST: JOHN gender=m coat=1 hat=fedora ", f"CAST: JOHN gender=m coat=1 hat=fedora voice={pick} ")
+            s, job, _ = call(base, "/api/make", {"text": text, "quality": a.quality, "voice": "auto"})
+            check("making the looks demo starts", s == 200 and job.get("id"), json.dumps(job)[:120])
+            deadline = time.time() + a.make_timeout
+            while s == 200 and time.time() < deadline:
+                _, job, _ = call(base, "/api/job/" + job["id"])
+                if job["state"] != "running":
+                    break
+                time.sleep(3)
+            check("the looks demo video was made", job.get("state") == "done", job.get("error") or job.get("message", ""))
+            if job.get("state") == "done":
+                s, body, _ = call(base, job["srt"])
+                check("every line of the looks demo is subtitled, drawn or not", s == 200 and body.count(b"-->") == 7, f"{body.count(b'-->')} cues")
+        else:
+            check("the looks demo is installed", False, str(demo))
 
         print("Closing the page:")
         s, _, _ = call(base, "/api/bye", {})

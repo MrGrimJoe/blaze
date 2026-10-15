@@ -1,5 +1,7 @@
 """
-Checks the documentation: every relative link points at something that exists, and every screenplay shown in the docs parses.
+Checks the documentation: every relative link points at something that exists, every screenplay shown in the docs parses, and
+the README is the hub it claims to be: every Markdown file in the repository can be reached from it by following links, and it
+links every main file (programs, modules, tests, tools, examples, workflows, installer files) directly.
 
     python tools/check_docs.py          (exit status 1 and a list of problems if anything is wrong)
 """
@@ -52,8 +54,51 @@ def unparsable_screenplays():
     return bad
 
 
+def _links_of(md: Path):
+    for m in re.finditer(r"\]\(([^)#\s]+)(#[^)]*)?\)", md.read_text(encoding="utf-8", errors="ignore")):
+        target = m.group(1)
+        if not target.startswith(("http://", "https://", "mailto:")):
+            yield (md.parent / target).resolve()
+
+
+def all_markdown():
+    """Every Markdown file that belongs to the repository (CDRCA's included, the packages inside node_modules not)."""
+    skip = {"node_modules", "handoff"}
+    return [p for p in REPO.rglob("*.md")
+            if not (skip & set(p.relative_to(REPO).parts)) and not any(x.startswith(".") and x != ".github" for x in p.relative_to(REPO).parts)]
+
+
+def must_be_linked_from_readme():
+    """The files the README links directly: the main programs, modules, tests, tools, examples, workflows and installer files."""
+    out = []
+    for pattern in ("blaze.py", "blaze.bat", "blaze_app.pyw", "studio_app.pyw", "requirements.txt", "pytest.ini", "cdrca-lib/atoms.cdrca",
+                    "blaze/*.py", "blaze/ui_assets/index.html", "blender/*.py", "tests/*.py", "tools/*.py", "tools/screens/*.py", "tools/screens/*.js",
+                    "examples/*", "installer/*.py", "installer/*.iss", "installer/*.ps1", "installer/*.txt", ".github/workflows/*.yml"):
+        out += [p for p in REPO.glob(pattern) if p.is_file() and p.name != "__init__.py"]
+    return out
+
+
+def readme_hub_problems():
+    readme = REPO / "README.md"
+    direct = {t for t in _links_of(readme)}
+    problems = []
+    reached, todo = {readme.resolve()}, [readme]
+    while todo:                                           # every Markdown file must be reachable from the README
+        for t in _links_of(todo.pop()):
+            if t.suffix == ".md" and t.exists() and t not in reached:
+                reached.add(t); todo.append(t)
+    for md in all_markdown():
+        if md.resolve() not in reached:
+            problems.append(f"README.md does not lead to {md.relative_to(REPO).as_posix()} (link it from the README or from a document it links)")
+    for f in must_be_linked_from_readme():
+        if f.resolve() not in direct:
+            problems.append(f"README.md does not link {f.relative_to(REPO).as_posix()}")
+    return problems
+
+
 def main() -> int:
-    problems = [f"broken link: {b}" for b in broken_links()] + [f"screenplay: {b}" for b in unparsable_screenplays()]
+    problems = ([f"broken link: {b}" for b in broken_links()] + [f"screenplay: {b}" for b in unparsable_screenplays()]
+                + readme_hub_problems())
     n = len(screenplay_blocks())
     for p in problems:
         print(p)

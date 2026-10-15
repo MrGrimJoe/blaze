@@ -47,7 +47,8 @@ jobs:
           export BLAZE_CONFIG="$RUNNER_TEMP/config.yaml"
           cp studio/config.yaml "$BLAZE_CONFIG"
           nohup python blaze.py ui --no-browser --port 8765 --out "$RUNNER_TEMP/videos" > ui.log 2>&1 &
-          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/api/status > /dev/null && break; sleep 1; done
+          for _ in $(seq 1 30); do curl -fs http://127.0.0.1:8765/api/status > /dev/null && break; sleep 1; done
+          curl -fs http://127.0.0.1:8765/api/status > /dev/null || { echo "::error::Blaze did not start within 30 s"; cat ui.log; exit 1; }
       - name: Photograph every state (real Google Chrome)
         env:
           BASE_URL: http://127.0.0.1:8765
@@ -116,7 +117,7 @@ jobs:
             mkdir -p "gallery/$name" && cp -r "$d"/. "gallery/$name"/
           done
           python tools/screens/make_gallery.py gallery --title "Blaze screens" --note "Run ${{ github.run_number }} of commit ${GITHUB_SHA::7} on ${{ github.ref_name }}. Look at each screen; the line under it says what to check."
-          ls -R gallery | head -60
+          find gallery | sort | head -60
       - uses: actions/upload-artifact@v4
         with:
           name: blaze-screens-gallery

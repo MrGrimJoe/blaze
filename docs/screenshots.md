@@ -17,7 +17,7 @@ Each picture has a line under it saying what to check, so you can look for the r
 
 | Section | How | Screens |
 |---|---|---|
-| **The Blaze page** | real Google Chrome against the running app | fresh page; example loaded; a mistake (red line, Go to line); a warning (Heads up); the format help; choosing an AI provider; AI ready (Whole story / Short scene); making a video (progress); the finished video playing; dark theme; phone width; tablet width |
+| **The Blaze page** | real Google Chrome against the running app | fresh page; example loaded; a mistake (red line, Go to line); a warning (Heads up); the format help; choosing an AI provider; AI ready (Whole story / Short scene); making a video (progress); the finished video playing; dark theme; phone width; tablet width; misspelt names and commands (three messages); the per-character voice picker (a voice is chosen, written into the screenplay and played); the text-looks demo |
 | **The desktop studio's windows** | the real windows, drawn off-screen | the first-run provider window in five states (empty, Anthropic chosen, with a key, ready with a second image provider, Gemini ready); the **main window** empty, ready, working (shots and Cancel), failed, finished (a real demo run, with its still), and in the dark theme |
 | **The Windows installer** | the real installer run page by page on Windows | welcome; license; license accepted; destination; tasks; ready; installing; finished; the app starting. *Best effort: it needs a desktop session, and the gallery lists any page it could not capture.* |
 | **The installed app's page** | the installed app on Windows, in real Chrome | the same twelve screens as the page, served by the installed app with its bundled tools |

@@ -39,7 +39,7 @@ CAST: NAME gender=m|f [child=1] [hairstyle=short|long|bun|bald|curly|spiky] [hai
 SCENE: <a short label for humans>
 BACKDROP: gen:<place>:<mood>        place = street|room|warehouse|forest|beach|office
                                     mood = day|sunset|night|dim|rain|storm|snow|night_rain|night_snow
-NAME: spoken line                   (one speaker per line; speech only, max 14 words per line)
+NAME: spoken line                   (NAME in CAPITALS, spelled the same way every time; one speaker per line; speech only, max 14 words per line)
 > narrator caption line             (optional)
 [ENTER NAME x0 x1]  walks in from x0 (use 9.5 or -9.5, off screen) to x1 (between -5 and 5)
 [EXIT NAME x]       walks to x (9.5 or -9.5) and leaves
@@ -48,6 +48,7 @@ NAME: spoken line                   (one speaker per line; speech only, max 14 w
 RULES
 - 2 to {scenes} scenes, about {lines} spoken lines in total, a clear beginning, middle and end.
 - Characters speaking before any [ENTER] are on stage at the start. Use stage commands sparingly.
+- A command may only name a character who speaks or enters; never invent a name inside a command. Every colon line is a speaker, so no other line may contain a colon.
 - Dialogue must be natural and speakable aloud. No stage directions inside the spoken text.
 {level}"""
 

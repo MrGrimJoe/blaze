@@ -46,7 +46,12 @@ The message always names the line. The common ones:
 | `The screenplay has no dialogue or narration lines.` | Add at least one `NAME: text` line. |
 | `CAST: ROBO asks for asset 'robo' but there is no library/characters/robo.png` | Add it: `python blaze.py asset add robo.png --name robo`. See [Tutorial 3](03-your-own-art.md). |
 | `not understood, shown as narration` (warning) | A line is neither `NAME: text`, a command nor a comment. Check for a missing colon. |
-| `unknown command [...]` (warning) | A command name is misspelled. The five commands are ENTER, MOVE, EXIT, HOP, PAUSE. |
+| `unknown command [...]` | A command name is misspelled (the message suggests the closest). The five commands are ENTER, MOVE, EXIT, HOP, PAUSE. |
+| `'Later that day' is not a declared character, so this line is not dialogue` | Only a `CAST:` character or a name in CAPITALS can speak. Start narration with `>`, or declare the name: `CAST: Zoe gender=f`. |
+| `'JOHM' is not a character in this screenplay (did you mean John?)` | A command named someone who never speaks, enters or is cast. Fix the spelling. |
+| `... is not on stage, so [MOVE] was skipped` (warning) | The character had left, or had not entered yet. Check the order of the commands. |
+| `look 'shout' is not defined` | Define it: `DEFINE LOOK shout size=0.5`. See the [screenplay reference](../reference/screenplay.md). |
+| `CAST Ann: the piper engine is not installed on this computer` / `no Piper model named ...` | The message says what to install. `python blaze.py voices` lists the voices that work here. |
 
 ## The video
 

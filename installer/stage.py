@@ -57,6 +57,7 @@ def stage_app(out: Path) -> Path:
         shutil.copyfile(REPO / f, app / f)
     (app / "examples").mkdir()
     shutil.copyfile(REPO / "tests" / "fixtures" / "sample_story.txt", app / "examples" / "the-warehouse.txt")
+    shutil.copyfile(REPO / "examples" / "looks-and-voices.txt", app / "examples" / "looks-and-voices.txt")
     version = re.search(r'__version__\s*=\s*"([^"]+)"', (REPO / "blaze" / "__init__.py").read_text(encoding="utf-8")).group(1)
     (app / "VERSION").write_text(version + "\n", encoding="utf-8")
     shutil.copyfile(HERE / "assets" / "blaze.ico", out / "blaze.ico")

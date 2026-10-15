@@ -23,6 +23,8 @@ async function shot(page, file, title, check) {
   manifest.push({ file: file + ".png", title, check });
   console.log("  ok  " + file);
 }
+const expect = (cond, msg) => { if (!cond) throw new Error("expected: " + msg); };
+const textOf = (p, sel) => p.evaluate((s) => (document.querySelector(s) || {}).innerText || "", sel);
 async function step(name, title, check, fn) {
   if (process.env.ONLY && !process.env.ONLY.split(",").includes(name)) return;   // ONLY=10,11 to redo some screens
   try { await fn(); } catch (e) {
@@ -46,10 +48,16 @@ async function step(name, title, check, fn) {
     await useExample(p); await shot(p, "02-example", "Example loaded", "");
   });
   await step("03", "A mistake", "The bottom line is red, names the problem, and has a Go to line button. Make video is disabled.", async () => {
-    await p.fill("#text", "JOHN: Hello.\n[ENTER JOHN left]\n"); await p.waitForTimeout(700); await shot(p, "03-error", "A mistake", "");
+    await p.fill("#text", "JOHN: Hello.\n[ENTER JOHN left]\n"); await p.waitForTimeout(700);
+    expect((await textOf(p, "#status")).includes("Go to line 2"), "the status line names line 2 with a Go to line button");
+    expect(await p.isDisabled("#make"), "Make video is disabled while there is a mistake");
+    await shot(p, "03-error", "A mistake", "");
   });
   await step("04", "A warning", "Heads up appears on the right for a line that is skipped; Make video stays enabled.", async () => {
-    await p.fill("#text", "JOHN: Hello.\n[FLY JOHN 3]\nMARY: Hi.\n"); await p.waitForTimeout(700); await shot(p, "04-warning", "A warning", "");
+    await p.fill("#text", "STYLE: dramatic\nJOHN: Hello.\nMARY: Hi.\n"); await p.waitForTimeout(700);
+    expect((await textOf(p, "#outline")).includes("Heads up"), "a Heads up list for the unsupported STYLE line");
+    expect(!(await p.isDisabled("#make")), "Make video stays enabled for a warning");
+    await shot(p, "04-warning", "A warning", "");
   });
   await step("05", "Format help", "The Screenplay format list opens on the right and reads clearly.", async () => {
     await useExample(p); await p.click("summary"); await p.waitForTimeout(300); await shot(p, "05-format-help", "Format help open", "");
@@ -87,6 +95,55 @@ async function step(name, title, check, fn) {
   });
   await step("12", "Tablet width", "A comfortable single column or two columns, no horizontal scrolling.", async () => {
     const t = await ctx("light", 820, 1180); await load(t); await useExample(t); await shot(t, "12-tablet", "Tablet width", ""); await t.context().close();
+  });
+
+  await step("13", "A misspelt name or command", "The status line is red and names the line: an undeclared speaker, a command that names nobody, and an unknown command each get their own message and, where there is one, a suggestion. Nothing is silently turned into a new character.", async () => {
+    const cases = [
+      ["JOHN: Hello.\nLater that day: Mary went home\n", "is not a declared character", 2],
+      ["JOHN: Hello.\n[MOVE JOHM 3]\n", "did you mean John", 2],
+      ["JOHN: Hello.\n[MOV JOHN 3]\n", "did you mean MOVE", 2],
+    ];
+    for (const [text, says, line] of cases) {
+      await p.fill("#text", text); await p.waitForTimeout(700);
+      const st = await textOf(p, "#status");
+      expect(st.includes(says) && st.includes("Go to line " + line), `"${says}" on line ${line}, got: ${st.slice(0, 120)}`);
+      expect(await p.isDisabled("#make"), "Make video is disabled");
+    }
+    await shot(p, "13-names", "A misspelt name or command", "");
+  });
+  await step("14", "A voice for each character", "Under the outline a Voices list has one row per character: a drop-down (Automatic, Silent, then every installed voice), a Play button and a speed box. Choosing a voice writes it into that character's CAST line in the editor.", async () => {
+    await load(p); await useExample(p);
+    const rows = await p.$$("#voicebox li");
+    expect(rows.length >= 2, "a row for each character in the example, got " + rows.length);
+    const select = await rows[0].$("select");
+    const options = await select.$$eval("option", (o) => o.map((x) => x.value));
+    expect(options[0] === "auto" && options[1] === "off", "Automatic and Silent come first");
+    const real = options.find((v) => v.includes(":") && !v.includes("not installed"));
+    if (real) {
+      await select.selectOption(real); await p.waitForTimeout(800);
+      const text = await p.inputValue("#text");
+      expect(text.includes("voice=" + real), "the CAST line now says voice=" + real);
+      expect(!(await p.isDisabled("#make")), "the screenplay is still valid");
+      const play = await p.$("#voicebox li .play");
+      await play.click();
+      await p.waitForFunction(() => !document.querySelector("#voicebox .play").disabled, null, { timeout: 30000 });
+      const err = await textOf(p, "#status");
+      expect(!/could not|not installed|no audio/i.test(err), "Play worked, status says: " + err.slice(0, 100));
+      console.log("  voice chosen and played:", real);
+    } else {
+      expect((await textOf(p, "#voicebox")).includes("No voice engine"), "with no engine installed the list says so");
+      console.log("  no voice engine on this machine: checked the empty state instead");
+    }
+    await shot(p, "14-voices", "A voice for each character", "");
+  });
+  await step("15", "Text looks and per-character speed", "A screenplay with DEFINE LOOK lines and look= on lines checks out: the outline lists the characters with a voice row each, and nothing is flagged.", async () => {
+    const demo = fs.readFileSync(path.join(__dirname, "..", "..", "examples", "looks-and-voices.txt"), "utf8");
+    await p.fill("#text", demo); await p.waitForTimeout(900);
+    const st = await textOf(p, "#status");
+    expect(!/not a declared|unknown|is not defined/i.test(st) && !(await p.isDisabled("#make")), "the looks demo is accepted, status: " + st.slice(0, 100));
+    expect((await p.$$("#voicebox li")).length === 3, "John, Mary and the Narrator each get a voice row");
+    await p.evaluate(() => { const t = document.getElementById("text"); t.scrollTop = 0; t.setSelectionRange(0, 0); });
+    await shot(p, "15-looks", "Text looks and per-character speed", "");
   });
 
   fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));

@@ -27,7 +27,7 @@ def _common(p, size=True):
     if size:    # `build` re-renders at the size and fps stored in the project's project.json instead
         p.add_argument("--res", default="1280x720", help="frame size, e.g. 1920x1080 (default 1280x720)")
         p.add_argument("--fps", type=int, default=24)
-    p.add_argument("--voice", default="auto", help="auto | espeak | pyttsx3 | off")
+    p.add_argument("--voice", default="auto", help="voice engine for characters with no voice= of their own: auto | espeak | pyttsx3 | piper | off")
     p.add_argument("--wpm", type=int, default=150, help="speaking speed in words per minute (about 105 is slow and clear)")
     p.add_argument("--workers", type=int, default=0, help="scenes rendered in parallel")
     p.add_argument("--keep-frames", action="store_true")
@@ -73,6 +73,45 @@ def cmd_ai(a) -> int:
     out.with_suffix(".txt").write_text(text, encoding="utf-8")
     print(f"Screenplay saved: {out.with_suffix('.txt')}\n")
     _report(make(text, out, _opts(a)))
+    return 0
+
+
+def cmd_expand(a) -> int:
+    """Print the screenplay in its explicit core form: what every shorthand line stands for."""
+    from .screenplay import parse, to_core
+    sp = parse(Path(a.script).read_text(encoding="utf-8"))
+    text = to_core(sp)
+    if a.output:
+        Path(a.output).write_text(text, encoding="utf-8")
+        print(f"Wrote {a.output}")
+    else:
+        sys.stdout.write(text)
+    for w in sp.warnings:
+        print(f"note: {w}", file=sys.stderr)
+    return 0
+
+
+def cmd_voices(a) -> int:
+    """List the voice engines and voices, or play a sample of one."""
+    from . import voice as V
+    if a.voice:
+        out = Path(a.output or "voice-sample.wav")
+        secs = V.preview(a.say, a.voice, out, gender=a.gender, rate=a.rate or 0, pitch=a.pitch if a.pitch is not None else -1)
+        print(f"Wrote {out} ({secs:.1f}s). Use it in a screenplay with:  CAST: NAME voice={V.check_spec(a.voice)}")
+        return 0
+    for e in V.engines_info():
+        if not e["available"]:
+            print(f"{e['engine']}: not installed.  {e['hint']}")
+            continue
+        voices = [v for v in e["voices"] if not a.engine or a.engine == e["engine"]]
+        if a.engine and a.engine != e["engine"]:
+            continue
+        print(f"{e['engine']}: {len(e['voices'])} voice(s)   (use as  CAST: NAME voice={e['engine']}:<voice>)")
+        for v in voices[: (None if a.all else 12)]:
+            print(f"    {v['id']:<34} {v['label']}")
+        if not a.all and len(voices) > 12:
+            print(f"    ... {len(voices) - 12} more; --all lists every voice, --engine {e['engine']} shows just this engine")
+    print("\nTry one:  blaze voices --voice espeak:en-gb+f2 --say \"Hello there\"")
     return 0
 
 
@@ -159,7 +198,17 @@ def doctor(a) -> int:
     return 0 if ok else 1
 
 
+def _safe_console() -> None:
+    """A Windows console may use a code page that cannot show a character's name (Zoë, علی): print '?' for it instead of crashing."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None) -> int:
+    _safe_console()
     ap = argparse.ArgumentParser(prog="blaze", description="Screenplay in, animated video out.")
     ap.add_argument("--version", action="version", version="blaze " + __version__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -172,6 +221,13 @@ def main(argv=None) -> int:
     p.add_argument("--quick", action="store_true", help="ONE request for a short screenplay instead of one per scene (cheaper)")
     p.add_argument("--level", help="language level for the dialogue, e.g. A2"); p.add_argument("--config", help="path to a BlazEng config.yaml")
     _common(p); p.set_defaults(fn=cmd_ai)
+    p = sub.add_parser("expand", help="print a screenplay in its explicit core form (what each shorthand line stands for)")
+    p.add_argument("script"); p.add_argument("-o", "--output", help="write to a file instead of the screen"); p.set_defaults(fn=cmd_expand)
+    p = sub.add_parser("voices", help="list the voices you can give characters (CAST: NAME voice=...), or play a sample of one")
+    p.add_argument("--engine", choices=("espeak", "pyttsx3", "piper")); p.add_argument("--all", action="store_true", help="list every voice")
+    p.add_argument("--voice", help="play a sample of this voice, e.g. espeak:en-us+m3"); p.add_argument("--say", default="Hello there. This is how I sound.")
+    p.add_argument("--gender", default="m", choices=("m", "f")); p.add_argument("--rate", type=int); p.add_argument("--pitch", type=int)
+    p.add_argument("-o", "--output", help="where to write the sample (default voice-sample.wav)"); p.set_defaults(fn=cmd_voices)
     p = sub.add_parser("ui", help="open the Blaze page in your browser (write, check, make, watch)")
     p.add_argument("--port", type=int, default=8765); p.add_argument("--no-browser", action="store_true")
     p.add_argument("--auto-exit", action="store_true", help="stop when the page is closed (the installed app does this)")
@@ -194,7 +250,7 @@ def main(argv=None) -> int:
         print(f"\nBlaze failed ({stage}): {e}", file=sys.stderr)
         if stage == "setup": print("Run: python blaze.py doctor", file=sys.stderr)
         return 2
-    except RuntimeError as e:
+    except (RuntimeError, ValueError) as e:
         print(f"\nBlaze failed: {e}", file=sys.stderr)
         return 2
 

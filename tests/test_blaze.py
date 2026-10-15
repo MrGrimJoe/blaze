@@ -61,9 +61,11 @@ class TestScreenplay:
         sp = parse("STYLE: both\nCAMERA: shake\nWEATHER: snow\nA: hi\n")
         assert len(sp.warnings) == 3 and all("not supported" in w for w in sp.warnings)
 
-    def test_unknown_lines_warn_not_crash(self):
-        sp = parse("JOHN: hi\nthis is just prose\n[JUMP JOHN]\n")
-        assert len(sp.warnings) == 2
+    def test_plain_prose_warns_but_an_unknown_command_is_an_error(self):
+        sp = parse("JOHN: hi\nthis is just prose\n")
+        assert len(sp.warnings) == 1 and "not understood" in sp.warnings[0]
+        with pytest.raises(ScreenplayError, match="unknown command"):
+            parse("JOHN: hi\n[JUMP JOHN]\n")
 
     def test_empty_screenplay_raises(self):
         with pytest.raises(ScreenplayError):
@@ -309,3 +311,23 @@ def test_end_to_end_video(tmp_path):
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1.0", "-i", str(shot), "-frames:v", "1", str(frame)], check=True)
     from PIL import ImageStat
     assert ImageStat.Stat(Image.open(frame).convert("L")).mean[0] > 15
+
+
+@needs_render
+def test_looks_and_per_character_voices_render_end_to_end(tmp_path):
+    """The demo screenplay: three text looks, a hidden one, a fixed sign, and (where espeak-ng exists) a chosen voice per character."""
+    text = (REPO / "examples" / "looks-and-voices.txt").read_text(encoding="utf-8")
+    have_espeak = bool(shutil.which("espeak-ng"))
+    if have_espeak:                                    # the voice choice is engine-specific, so only ask for it where it exists
+        text = text.replace("CAST: JOHN gender=m coat=1 hat=fedora ", "CAST: JOHN gender=m coat=1 hat=fedora voice=espeak:en-gb+m3 ")
+        text = text.replace("CAST: MARY gender=f dress=1 ", "CAST: MARY gender=f dress=1 voice=espeak:en-us+f2 ")
+    opts = Options(width=320, height=180, fps=8, voice="auto", workers=1, progress=lambda m: None)
+    res = make(text, tmp_path / "demo.mp4", opts)
+    assert res.video.exists() and res.duration > 10
+    cues = [c for c in res.srt.read_text(encoding="utf-8").split("\n\n") if c.strip()]
+    assert len(cues) == 7                                              # hidden text is still subtitled
+    scene = (res.project / "scenes" / "s01.cdrca").read_text(encoding="utf-8")
+    assert " as txt_sign" in scene and " as say_Mary_" in scene and "0xc0141e" in scene
+    if have_espeak:
+        raw = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", str(res.video)]).decode().split()
+        assert "audio" in [s.rstrip(",") for s in raw]                 # csv=p=0 adds a trailing comma on some ffmpeg builds

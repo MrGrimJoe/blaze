@@ -21,7 +21,16 @@
 **Background**
 
 - [How Blaze works](ARCHITECTURE.md)
+- [Language design: for the owner of the screenplay language](LANGUAGE-DESIGN.md)
 - [The Windows installer](installer.md)
 - [Seeing every screen without running anything](screenshots.md)
 - [The desktop studio and its installer](studio.md)
 - [Changes made to CDRCA](CDRCA-CHANGES.md) and [requests for CDRCA](CDRCA-PROPOSALS.md)
+
+**Tests and status**
+
+- [Testing and CI: what runs where, how to read a run, the skip rules](TESTING.md)
+- [Status: what is verified, where, and what is not done](STATUS.md)
+- [Changelog](../CHANGELOG.md)
+
+[Back to the main README](../README.md), which links every file in the repository.

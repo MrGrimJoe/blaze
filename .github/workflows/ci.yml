@@ -1,5 +1,11 @@
 # Tests, on every push and pull request. Anything that cannot be tested on the machine where the code was written runs here:
-# Windows and macOS, the real voice engine of each system, Blender, the documentation, the licence.
+# Windows and macOS, the real voice engine of each system (Windows SAPI voices), the real Piper with a real voice model, Blender,
+# the documentation, the licence.
+#
+# Every test run writes a report (counts per test file, each skipped test and why) with tools/ci_report.py, and the last job,
+# `test-report`, puts them in one table on the run's summary page. A skipped test is accepted only for the reasons listed next to
+# its job (`skips`), so a test that must run (a Windows voice, Piper, Blender) cannot quietly be skipped. How to read all this:
+# docs/TESTING.md.
 name: tests
 
 on:
@@ -21,6 +27,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          # What each system may skip, as regular expressions on the skip reason. Blender and Piper have their own jobs below.
+          # The Windows leg may not skip anything about pyttsx3 (the real SAPI voices are exactly what runs there); Linux and
+          # macOS have no SAPI. espeak-ng is not installed on the Windows runner.
+          - os: ubuntu-latest
+            skips: "Blender|CI sets BLAZE_REQUIRE_(BLENDER|PIPER)|real piper program|pyttsx3"
+          - os: macos-latest
+            skips: "Blender|CI sets BLAZE_REQUIRE_(BLENDER|PIPER)|real piper program|pyttsx3"
+          - os: windows-latest
+            skips: "Blender|fake executable is a shell script|CI sets BLAZE_REQUIRE_(BLENDER|PIPER)|real piper program|espeak-ng"
     runs-on: ${{ matrix.os }}
     env:
       QT_QPA_PLATFORM: offscreen
@@ -61,7 +77,7 @@ jobs:
       - name: Blaze's tests (real renders, voices, the page's server, the launcher)
         id: blaze_tests
         continue-on-error: true
-        run: python -m pytest tests -v -rs 2>&1 | tee pytest_output.log
+        run: python -m pytest tests -v -rs --junitxml=reports/pytest.xml 2>&1 | tee pytest_output.log
 
       - name: Commit pytest log on failure (self-diagnosing)
         if: steps.blaze_tests.outcome == 'failure'
@@ -85,10 +101,25 @@ jobs:
         run: exit 1
 
       - name: CDRCA's tests
+        if: ${{ !cancelled() }}
         working-directory: cdrca
         run: |
-          node tests/transpiler.test.js
-          node tests/render.test.js
+          mkdir -p ../reports
+          node tests/transpiler.test.js 2>&1 | tee ../reports/cdrca-tests.log
+          node tests/render.test.js 2>&1 | tee -a ../reports/cdrca-tests.log
+
+      - name: Test report (counts per file, every skip and its reason)
+        if: ${{ !cancelled() }}
+        run: |
+          rc=0
+          python tools/ci_report.py pytest reports/pytest.xml --label "Blaze tests (${{ matrix.os }})" --out reports/blaze.json --allow-skip "${{ matrix.skips }}" || rc=1
+          python tools/ci_report.py tap reports/cdrca-tests.log --label "CDRCA tests (${{ matrix.os }})" --out reports/cdrca.json || rc=1
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: report-blaze-${{ matrix.os }}
+          path: reports/*.json
 
   studio:
     name: Desktop studio on ${{ matrix.os }}
@@ -126,7 +157,7 @@ jobs:
         id: studio_tests
         continue-on-error: true
         working-directory: studio
-        run: python -m pytest tests -v -rs 2>&1 | tee ../studio_pytest_output.log
+        run: python -m pytest tests -v -rs --junitxml=../reports/pytest.xml 2>&1 | tee ../studio_pytest_output.log
 
       - name: Commit studio pytest log on failure (self-diagnosing)
         if: steps.studio_tests.outcome == 'failure'
@@ -145,11 +176,23 @@ jobs:
         if: steps.studio_tests.outcome == 'failure'
         run: exit 1
 
+      - name: Test report (counts per file, every skip and its reason)
+        if: ${{ !cancelled() }}
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: report-studio-${{ matrix.os }}
+          path: reports/*.json
+
   blender:
     name: Blender characters and backdrops
     runs-on: ubuntu-latest
     env:
       BLAZE_REQUIRE_BLENDER: "1"        # the Blender tests must run here, not be skipped
+    defaults:
+      run:
+        shell: bash                     # explicit bash turns on pipefail: without it `pytest | tee` hides a failing test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -168,7 +211,7 @@ jobs:
       - name: Blender tests
         id: blender_tests
         continue-on-error: true
-        run: python -m pytest tests/test_blender.py -v -rs 2>&1 | tee blender_pytest_output.log
+        run: python -m pytest tests/test_blender.py -v -rs --junitxml=reports/pytest.xml 2>&1 | tee blender_pytest_output.log
 
       - name: Commit blender pytest log on failure (self-diagnosing)
         if: steps.blender_tests.outcome == 'failure'
@@ -186,6 +229,102 @@ jobs:
         if: steps.blender_tests.outcome == 'failure'
         run: exit 1
 
+      - name: "Test report (no skips are accepted here, Blender is installed on purpose)"
+        if: ${{ !cancelled() }}
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Blender tests" --out reports/blender.json
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: report-blender
+          path: reports/*.json
+
+  piper:
+    name: Real Piper voices on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            skips: "pyttsx3"
+          - os: windows-latest
+            skips: "espeak-ng"
+    runs-on: ${{ matrix.os }}
+    env:
+      BLAZE_REQUIRE_PIPER: "1"          # a missing Piper or voice model fails the build instead of being skipped
+      BLAZE_REQUIRE_VOICE: "1"
+      BLAZE_VOICES: ${{ github.workspace }}/piper-voices
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng
+      - name: Tools (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Python packages (the real Piper, and the Windows system voices)
+        run: |
+          pip install -r requirements.txt pytest pyyaml pydantic requests piper-tts
+          if [ "$RUNNER_OS" = "Windows" ]; then pip install pyttsx3; fi
+      - name: The renderer's browser
+        working-directory: cdrca
+        run: |
+          npm install --no-save playwright
+          if [ "$RUNNER_OS" = "Linux" ]; then npx playwright install --with-deps chromium; else npx playwright install chromium; fi
+      - name: A real Piper voice model (cached)
+        id: voices_cache
+        uses: actions/cache@v4
+        with:
+          path: piper-voices
+          key: piper-voice-en-us-lessac-low-v1
+      - name: Download the voice model
+        if: steps.voices_cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p piper-voices
+          curl -fL --retry 3 -o voice.tar.gz https://github.com/rhasspy/piper/releases/download/v0.0.2/voice-en-us-lessac-low.tar.gz
+          tar xzf voice.tar.gz -C piper-voices
+          ls -la piper-voices
+      - run: piper --help | head -5
+      - name: Voice tests, with the real Piper (real audio, real speed changes, a real video)
+        id: piper_tests
+        continue-on-error: true
+        run: python -m pytest tests/test_voices.py -v -rs --junitxml=reports/pytest.xml 2>&1 | tee piper_pytest_output.log
+
+      - name: Commit piper pytest log on failure (self-diagnosing)
+        if: steps.piper_tests.outcome == 'failure'
+        run: |
+          LOG_BRANCH="ci-debug-logs-piper-${{ matrix.os }}"
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin "$LOG_BRANCH" 2>/dev/null || true
+          git checkout -B "$LOG_BRANCH"
+          cp piper_pytest_output.log "piper-pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git add -f "piper-pytest-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.log"
+          git commit -m "CI debug log: piper pytest failure on ${{ matrix.os }}, run ${GITHUB_RUN_NUMBER}"
+          git push origin "$LOG_BRANCH" --force
+
+      - name: Fail the job if the piper tests actually failed
+        if: steps.piper_tests.outcome == 'failure'
+        run: exit 1
+
+      - name: Test report (counts per file, every skip and its reason)
+        if: ${{ !cancelled() }}
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Piper and voice tests (${{ matrix.os }})" --out reports/piper.json --allow-skip "${{ matrix.skips }}"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: report-piper-${{ matrix.os }}
+          path: reports/*.json
+
   docs-and-licence:
     name: Documentation and licence
     runs-on: ubuntu-latest
@@ -197,9 +336,40 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Links work and every screenplay shown in the docs parses
         run: python tools/check_docs.py
+      - name: Workflow files are valid (actionlint, with shellcheck for the bash steps)
+        run: |
+          sudo apt-get install -y shellcheck
+          pip install actionlint-py
+          actionlint -color
       - name: The repository licence is the CDRCA one
         run: cmp LICENSE.md cdrca/LICENSE.md
       - name: Compare with the licence in the live CDRCA repository
         run: |
           curl -fsSL https://raw.githubusercontent.com/ISLAH-org/CDRCA/main/LICENSE.md -o /tmp/upstream-LICENSE.md || { echo "::warning::could not fetch the upstream licence"; exit 0; }
           if cmp -s LICENSE.md /tmp/upstream-LICENSE.md; then echo "identical to ISLAH-org/CDRCA main"; else echo "::warning::LICENSE.md differs from ISLAH-org/CDRCA main: update cdrca/ and LICENSE.md"; fi
+
+  test-report:
+    name: Test report
+    if: ${{ !cancelled() }}
+    needs: [blaze, studio, blender, piper]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: report-*
+          path: reports
+          merge-multiple: true
+      - name: One table for every test run (a run that never reported fails here)
+        run: |
+          python3 tools/ci_report.py combine reports --md ci-report.md --expect \
+            "Blaze tests (ubuntu-latest)" "Blaze tests (windows-latest)" "Blaze tests (macos-latest)" \
+            "CDRCA tests (ubuntu-latest)" "CDRCA tests (windows-latest)" "CDRCA tests (macos-latest)" \
+            "Desktop studio tests (ubuntu-latest)" "Desktop studio tests (windows-latest)" \
+            "Blender tests" \
+            "Piper and voice tests (ubuntu-latest)" "Piper and voice tests (windows-latest)"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: test-report
+          path: ci-report.md

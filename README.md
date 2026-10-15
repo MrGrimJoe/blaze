@@ -1,5 +1,9 @@
 # Blaze
 
+[![tests](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml)
+[![installer](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml)
+[![screens](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml)
+
 **Write a story as plain text. Get an animated, voiced video.**
 
 ```
@@ -32,11 +36,12 @@ You can open and edit the generated CDRCA scripts and render again, so nothing i
 
 | | |
 |---|---|
-| **Scenes and dialogue** | Any number of scenes, any number of speakers, a narrator caption style, a title card with subtitle. |
+| **Scenes and dialogue** | Any number of scenes, any number of speakers, a narrator, a title card with subtitle. Text is not always a speech box: define your own **looks** (`DEFINE LOOK shout size=0.55 ink=0xc0141e`), put text at a fixed place, or speak a line without drawing it. |
+| **A strict, explicit language** | A small explicit core (`SPEAK`, `NARRATE`, `MOVE` ...) with the friendly `NAME: text` shorthand expanding into it (`blaze expand`). Misspelt names and commands are errors with a suggestion, never new characters. |
 | **Staging** | Characters walk in (`ENTER`), walk to a spot (`MOVE`), hop (`HOP`), walk out (`EXIT`), and you can `PAUSE`. Positions are exact numbers. Characters never stand on each other. |
 | **Characters** | Drawn for you from exact traits (`gender`, `hairstyle`, `top`, `coat`, `hat`, `glasses`, `child` ...), with a mouth that moves while they speak. Or bring your own PNG or Blender model. |
 | **Backdrops** | 6 places (street, room, warehouse, forest, beach, office) in 9 moods (day, sunset, night, dim, rain, storm, snow, night_rain, night_snow), drawn for you. Or bring your own image or Blender scene. |
-| **Voices** | A different, stable voice per character (gender and age from their look), spoken at the speed you choose. Speech boxes reveal text in time with the voice. Or render silent. |
+| **Voices** | A voice for every character: pick one per character (`CAST: JOHN voice=espeak:en-gb+m3 rate=140`, with espeak-ng, system voices or Piper) or let Blaze give each a stable one. Speech boxes reveal text in time with the voice. Or render silent. |
 | **Subtitles** | An `.srt` file for every video. |
 | **Output** | mp4 at the size and frame rate you choose (640x360 for quick drafts, 1920x1080 for the final). |
 | **Editable** | Every video leaves a project folder with the generated CDRCA scripts, assets and audio. Change a number, run `blaze build`. |
@@ -58,7 +63,7 @@ This is the bundled example, `tests/fixtures/sample_story.txt`, rendered by Blaz
 [docs/installer.md](docs/installer.md)), run it, and open **Blaze** from the Start menu. Python, Node.js, ffmpeg, the browser and
 Windows voices are all inside it, and no administrator rights are needed.
 
-**From source** (any system) you need **Python 3.9+**, **Node.js** and **ffmpeg**. Voices need **espeak-ng** (or `pip install pyttsx3` on Windows).
+**From source** (any system) you need **Python 3.9+**, **Node.js** and **ffmpeg**. Voices need **espeak-ng** (or `pip install pyttsx3` for the system voices on Windows and macOS), or [Piper](docs/tutorials/04-voices-timing-subtitles.md) for natural offline voices; `python blaze.py voices` shows what is installed.
 
 ```
 pip install -r requirements.txt
@@ -90,9 +95,9 @@ python blaze.py make story.txt -o story.mp4 --res 960x540 --fps 20
 | [8. Blaze Studio](docs/tutorials/08-blaze-studio.md) | Describe a video in a few sentences and let the desktop studio plan, draw and join it, with an offline demo that needs no AI. |
 
 Reference: [screenplay format](docs/reference/screenplay.md) · [command line](docs/reference/cli.md) ·
-[project folder](docs/reference/project-folder.md) · [how it works](docs/ARCHITECTURE.md) ·
-[the Windows installer](docs/installer.md) · [seeing every screen](docs/screenshots.md) ·
-[the desktop studio](docs/studio.md)
+[project folder](docs/reference/project-folder.md) · [atoms library](docs/reference/atoms.md) · [how it works](docs/ARCHITECTURE.md) ·
+[language design](docs/LANGUAGE-DESIGN.md) · [the Windows installer](docs/installer.md) · [seeing every screen](docs/screenshots.md) ·
+[the desktop studio](docs/studio.md) · [testing and CI](docs/TESTING.md) · [status](docs/STATUS.md) · [changelog](CHANGELOG.md)
 
 ## Why you can trust the result
 
@@ -111,49 +116,111 @@ has no camera moves, weather particles or lip-sync to individual sounds yet (the
 characters face the viewer. Features CDRCA itself would need first are listed as requests in
 [docs/CDRCA-PROPOSALS.md](docs/CDRCA-PROPOSALS.md); Blaze does not fake them.
 
-## Status
+## Tests and CI
 
-Verified on Linux (Python 3.12, Node 22, Chromium with software rendering, ffmpeg, espeak-ng): the CDRCA tests (8 + 4),
-Blaze's Python tests (145 passed, 10 skipped: the ones that need Blender or the Windows voice, which CI covers), the desktop studio's tests (344 passed, 2 skipped),
-and sample stories rendered end to end with voices. An earlier session also
-verified `asset add` against real Blender 4.0.2.
+**Every test runs on GitHub Actions on every push**, on Linux, **Windows** and macOS: Blaze's own tests (real renders, the page's
+server, the launcher, the workflow files), the desktop studio's, CDRCA's, the real Blender, the real Piper neural voices, the
+documentation, and the Windows installer ([`ci.yml`](.github/workflows/ci.yml),
+[`build-blaze-installer.yml`](.github/workflows/build-blaze-installer.yml), [`screenshots.yml`](.github/workflows/screenshots.yml)).
+The badges at the top are the live result.
 
-Not run yet, because they need machines other than the one this was written on: Windows and macOS, the Windows voices
-(pyttsx3), Blender on a CI machine, and the Windows installer. **They are all set up as GitHub Actions**
-([`ci.yml`](.github/workflows/ci.yml), [`build-blaze-installer.yml`](.github/workflows/build-blaze-installer.yml),
-[`screenshots.yml`](.github/workflows/screenshots.yml)) that run on every push; they have not run yet, so the first run may need small
-fixes. The files they use, and the installed app's end-to-end check, were verified here against a staged copy of the app. The
-[**Screens** workflow](docs/screenshots.md) photographs every screen so you can check the interface by eye.
+A bare "N passed" says little, so each run ends with a **Test report** on its summary page: a row per test run, the counts per
+test file, and every skipped test with its reason. A test may only be skipped for a reason its job lists, so the Windows
+system-voice tests, Blender and Piper cannot quietly stop running; a job that never reported fails the run; and a failing job
+commits its full log to a `ci-debug-logs-*` branch. Workflow files are checked by `actionlint` and by tests of their own.
+How to read a run, what each job proves, and the skip rules: **[docs/TESTING.md](docs/TESTING.md)**.
 
-Never tested: the AI writer and Blaze Studio's own-story mode against a live provider. People who use them bring their own key (and
-set up any local model themselves), so there is nothing the repository can run for them; both are tested with scripted stand-ins.
-Rendering without a GPU is slow: the 58-second example takes about a minute at Draft quality on a one-core test machine.
-
-## Layout
-
-```
-blaze.py, blaze/      parser, compiler (screenplay -> CDRCA), art, voices, Blender bridge, library, pipeline, CLI, the page
-blaze/ui_assets/      the page (one HTML file)
-blaze_app.pyw         starts Blaze without a console window (the installer's shortcut runs this)
-blender/              the script that runs inside Blender
-cdrca/                CDRCA = upstream 6b8a742 + the reviewed commits in cdrca-patches/
-cdrca-lib/            atoms.cdrca: the Picture and Words props, written in CDRCA itself
-cdrca-patches/        the small changes made to CDRCA, as `git am` patches
-studio/               Blaze Studio (the PyQt6 desktop window and its pipeline); it ships inside Blaze's installer
-installer/            the Blaze Windows installer: staging script, Inno Setup script, icon and pictures, end-to-end check
-tools/                screenshot scripts and the documentation checker
-examples/             a ready-to-make screenplay: `python blaze.py make examples/the-warehouse.txt`
-.github/workflows/    tests on three systems, the installer, the screenshots, the real-AI check
-docs/                 tutorials, reference, architecture
-tests/                Blaze's tests (CDRCA's are in cdrca/tests, the studio's in studio/tests)
-```
+Run it yourself:
 
 ```
 python -m pytest tests                          # Blaze: real renders, voices and Blender are used when installed
 (cd studio && python -m pytest tests)           # the desktop studio
 (cd cdrca && node tests/transpiler.test.js && node tests/render.test.js)
-python tools/check_docs.py                      # links work, every screenplay in the docs parses
+python tools/check_docs.py                      # links work, every screenplay in the docs parses, this README links every file
 ```
+
+## Status
+
+What is verified, and where, is written down in **[docs/STATUS.md](docs/STATUS.md)**; this is the short version.
+
+- **Checked on Linux:** the language, the compiler, the voices (espeak-ng, `pyttsx3`, and the real Piper with a real voice model),
+  the page in a browser (every screen is photographed with assertions), the installer's end-to-end check run from source, the studio's tests, and CDRCA's tests.
+- **Only CI can check, and has not yet run with the current code:** everything on **Windows and macOS**, including the Windows
+  system (SAPI) voices chosen per character, the real Piper on Windows, the Windows installer built and installed with the new
+  files, and the screenshots in real Chrome. They are all set up as workflows; the first run may need small fixes, and a failing
+  job leaves its log on a `ci-debug-logs-*` branch.
+- **Not done:** removing Blaze Studio, a JavaScript-only core, and a few things that need CDRCA to change. The reasons and the
+  steps are in [docs/STATUS.md](docs/STATUS.md).
+- **Never tested live:** the AI writer and Studio's own-story mode against a real provider (they need your key); both are tested with scripted stand-ins.
+
+Rendering without a GPU is slow: the 58-second example takes about a minute at Draft quality on a one-core machine.
+
+## Where everything is
+
+This README links every file, so you can start here for anything.
+
+### Documents
+
+| | |
+|---|---|
+| Getting started | [docs/README.md](docs/README.md) (the documentation index) · tutorials 1 to 8 above |
+| Reference | [screenplay](docs/reference/screenplay.md) · [command line](docs/reference/cli.md) · [project folder](docs/reference/project-folder.md) · [atoms](docs/reference/atoms.md) |
+| How it works | [architecture](docs/ARCHITECTURE.md) · [language design](docs/LANGUAGE-DESIGN.md) · [the desktop studio](docs/studio.md) · [the installer](docs/installer.md) |
+| Tests and status | [testing and CI](docs/TESTING.md) · [status](docs/STATUS.md) · [screenshots](docs/screenshots.md) · [changelog](CHANGELOG.md) |
+| CDRCA | [what Blaze changed in CDRCA](docs/CDRCA-CHANGES.md) · [what it would like from CDRCA](docs/CDRCA-PROPOSALS.md) · [the patches](cdrca-patches/README.md) · [CDRCA's own README](cdrca/README.md) and [examples](cdrca/examples/README.md) |
+| Studio | [the studio's README](studio/README.md) |
+| Licences | [LICENSE.md](LICENSE.md) · [LICENSES.md](LICENSES.md) · [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) · [CDRCA's licence](cdrca/LICENSE.md) |
+
+### Programs and code
+
+| File | What it is |
+|---|---|
+| [blaze.py](blaze.py), [blaze.bat](blaze.bat) | the command line (`python blaze.py ...`) and its Windows launcher |
+| [blaze_app.pyw](blaze_app.pyw), [studio_app.pyw](studio_app.pyw) | start the page, or the studio window, without a console (the installer's shortcuts run these) |
+| [`blaze/__init__.py`](blaze/__init__.py) | the version |
+| [blaze/screenplay.py](blaze/screenplay.py) | the parser: strict names, the explicit core, `to_core` |
+| [blaze/looks.py](blaze/looks.py) | text looks: how on-screen text is drawn, as exact numbers |
+| [blaze/compiler.py](blaze/compiler.py) | the compiler: screenplay to CDRCA scripts (positions, timing, text) |
+| [blaze/art.py](blaze/art.py) | draws characters and backdrops |
+| [blaze/voice.py](blaze/voice.py) | the voice engines (espeak-ng, system voices, Piper), a voice per character, listing and checks |
+| [blaze/pipeline.py](blaze/pipeline.py) | the whole run: check, draw, speak, compile, render, join |
+| [blaze/cli.py](blaze/cli.py) | the commands (`make`, `build`, `expand`, `voices`, `ui`, `ai`, `asset`, `doctor`, `setup`) |
+| [blaze/ui.py](blaze/ui.py), [blaze/ui_assets/index.html](blaze/ui_assets/index.html) | the page's server, and the page |
+| [blaze/ai.py](blaze/ai.py) | the optional AI writer |
+| [blaze/library.py](blaze/library.py), [blaze/blender.py](blaze/blender.py), [blender/blaze_blender.py](blender/blaze_blender.py) | your own characters and backdrops, and the Blender bridge |
+| [blaze/launcher.py](blaze/launcher.py) | what the installed app's shortcuts run |
+| [cdrca/](cdrca/) | CDRCA, the animation engine Blaze renders with (upstream plus [the patches](cdrca-patches/)) |
+| [cdrca-lib/atoms.cdrca](cdrca-lib/atoms.cdrca) | the `Picture` and `Words` props, written in CDRCA itself |
+| [studio/](studio/) | Blaze Studio, the desktop window |
+| [requirements.txt](requirements.txt), [pytest.ini](pytest.ini) | Python packages, test settings |
+
+### Installer
+
+| File | What it is |
+|---|---|
+| [installer/stage.py](installer/stage.py) | gathers everything the installer needs |
+| [installer/blaze.iss](installer/blaze.iss) | the Inno Setup script |
+| [installer/runtime-requirements.txt](installer/runtime-requirements.txt) | the packages inside the installed app |
+| [installer/smoke_installed.py](installer/smoke_installed.py) | runs the installed app end to end |
+| [installer/screenshot_installer.ps1](installer/screenshot_installer.ps1) | photographs the wizard pages |
+| [installer/make_assets.py](installer/make_assets.py), [installer/assets/](installer/assets/) | the icon and wizard pictures |
+
+### Tests, tools, examples, workflows
+
+| File | What it is |
+|---|---|
+| [tests/test_blaze.py](tests/test_blaze.py), [tests/test_language.py](tests/test_language.py), [tests/test_voices.py](tests/test_voices.py), [tests/test_voice_engines.py](tests/test_voice_engines.py) | the language, the compiler, the pipeline, real renders, the voices |
+| [tests/test_ui.py](tests/test_ui.py), [tests/test_ai_animation.py](tests/test_ai_animation.py), [tests/test_blender.py](tests/test_blender.py), [tests/test_launcher.py](tests/test_launcher.py) | the page's server, the AI writer, Blender, the launcher |
+| [tests/test_installer_and_workflows.py](tests/test_installer_and_workflows.py), [tests/test_workflows.py](tests/test_workflows.py), [tests/test_ci_report.py](tests/test_ci_report.py), [tests/test_architecture.py](tests/test_architecture.py), [tests/test_license.py](tests/test_license.py) | the installer, the workflow files, the CI report, the module boundaries, the licence |
+| [tests/](tests/), [studio/tests/](studio/tests/), [cdrca/tests/](cdrca/tests/) | all test folders (what each file covers: [docs/TESTING.md](docs/TESTING.md)) |
+| [tools/check_docs.py](tools/check_docs.py) | links work, screenplays in the docs parse, this README links every file |
+| [tools/ci_report.py](tools/ci_report.py) | the test report and skip policy CI uses |
+| [tools/screens/ui_screens.js](tools/screens/ui_screens.js), [tools/screens/studio_screens.py](tools/screens/studio_screens.py), [tools/screens/make_gallery.py](tools/screens/make_gallery.py) | photograph the page and the studio, and build the gallery |
+| [examples/the-warehouse.txt](examples/the-warehouse.txt) | a three-scene mystery: `python blaze.py make examples/the-warehouse.txt` |
+| [examples/looks-and-voices.txt](examples/looks-and-voices.txt) | text looks and a speed for each character |
+| [.github/workflows/ci.yml](.github/workflows/ci.yml) | every test, on three systems, with one report |
+| [.github/workflows/build-blaze-installer.yml](.github/workflows/build-blaze-installer.yml) | builds, installs and checks the Windows installer |
+| [.github/workflows/screenshots.yml](.github/workflows/screenshots.yml) | photographs every screen into a gallery |
 
 ## Licenses
 

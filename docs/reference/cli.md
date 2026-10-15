@@ -52,6 +52,28 @@ python blaze.py ui [--port 8765] [--no-browser] [--out DIR] [--library DIR]
 Serves the page on `127.0.0.1` only (requests from any other host name are refused) and opens it in your browser. Videos
 are kept in `--out` (default `./blaze-videos`). Stop it with Ctrl+C.
 
+## `expand`: see what the shorthand means
+
+```
+python blaze.py expand story.txt [-o story.core.txt]
+```
+
+Prints the screenplay in its explicit core form (`SPEAK`, `NARRATE`, one `CAST:` line per character, every `DEFINE LOOK`).
+The result is a screenplay too, and makes the same video. Warnings go to the error stream. See the
+[screenplay reference](screenplay.md).
+
+## `voices`: choose a voice for a character
+
+```
+python blaze.py voices [--engine espeak|pyttsx3|piper] [--all]
+python blaze.py voices --voice espeak:en-gb+f2 [--say "Hello"] [--gender m|f] [--rate 140] [--pitch 60] [-o sample.wav]
+```
+
+The first form lists the engines (and says how to install the ones that are missing) and the voices each offers; the second
+plays a sample of one voice to a wav file. Use what you find in a screenplay as `CAST: NAME voice=<engine>:<voice>`. The page
+does the same with a drop-down and a Play button for every character. See
+[Tutorial 4](../tutorials/04-voices-timing-subtitles.md).
+
 ## `asset`: your own characters and backdrops
 
 ```

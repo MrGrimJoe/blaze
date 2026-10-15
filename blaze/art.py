@@ -39,7 +39,11 @@ GARMENTS_BOTTOM = r"(pants|jeans|trousers|skirt|shorts)"
 
 
 def slug(name: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "char"
+    """A file-name-safe, ASCII-only name. A name with letters outside a-z (Zoë, علی) gets a short hash so two of them never collide."""
+    base = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+    if name.isascii():
+        return base or "char"
+    return (base or "char") + "_" + hashlib.sha1(name.lower().encode("utf-8")).hexdigest()[:6]
 
 
 def _h(s: str) -> int:

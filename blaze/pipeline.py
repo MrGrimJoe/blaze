@@ -38,7 +38,7 @@ class Options:
     width: int = 1280
     height: int = 720
     fps: int = 24
-    voice: str = "auto"            # auto | espeak | pyttsx3 | off
+    voice: str = "auto"            # the engine for characters with no voice= of their own: auto | espeak | pyttsx3 | piper | off
     wpm: int = 150                 # speaking speed (slower = better for learners; ~110)
     workers: int = field(default_factory=lambda: max(1, min(4, os.cpu_count() or 2)))
     keep_frames: bool = False
@@ -106,19 +106,37 @@ def create_project(text: str, project: Path, opts: Options, base_dir: Optional[P
 
     speaker = voice_mod.get_voice(opts.voice, opts.wpm)
     log(f"Voice: {speaker.name}")
-    jobs = []  # (scene index, beat index, who, text, wav)
+    chosen: Dict[str, dict] = {}                   # character -> its voice settings, checked against what is installed here
+    for c, sd in sp.speech.items():
+        spec = sd.get("voice", "auto")
+        try:
+            chosen[c] = dict(sd, voice=voice_mod.check_spec(spec))
+        except ValueError as e:
+            raise BlazeError(f"CAST {c}: {e}", "voices")
+    named = {c: sd["voice"] for c, sd in chosen.items() if sd.get("voice") not in (None, "auto")}
+    if named:
+        log("Voices: " + ", ".join(f"{c} = {v}" for c, v in named.items()))
+    jobs = []  # (scene index, beat index, profile, text, wav)
     for si, sc in enumerate(sp.scenes, 1):
         for bj, b in enumerate(sc.beats):
             if b.kind in ("say", "narr"):
                 who = b.who if b.kind == "say" else "Narrator"
                 a = apps.get(who)
-                prof = voice_mod.profile_for(who, a.gender if a else "m", a.child if a else False)
+                gender, child = (a.gender if a else "m"), (a.child if a else False)
+                if not a and who in sp.cast:              # CAST: Narrator gender=f
+                    kv = art.parse_pairs(sp.cast[who]) if sp.cast[who].strip() else {}
+                    gender, child = kv.get("gender", gender), kv.get("child") == "1"
+                sd = chosen.get(who, {})
+                prof = voice_mod.profile_for(who, gender, child, sd.get("voice", "auto"), sd.get("rate", 0), sd.get("pitch", -1))
                 jobs.append((si, bj, prof, b.text, project / "audio" / f"s{si:02d}_{bj:02d}.wav"))
 
     def synth(job):
         si, bj, prof, txt, wav = job
-        dur = speaker.synth(txt, prof, wav)
-        return (si, bj), ((wav, dur) if dur is not None else (None, voice_mod.estimate_seconds(txt, opts.wpm)))
+        try:
+            dur = speaker.synth(txt, prof, wav)
+        except RuntimeError as e:
+            raise BlazeError(str(e), "voices")
+        return (si, bj), ((wav, dur) if dur is not None else (None, voice_mod.estimate_seconds(txt, prof.rate or opts.wpm)))
 
     with ThreadPoolExecutor(max_workers=opts.workers) as ex:
         info = dict(ex.map(synth, jobs))

@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple
 from PIL import Image
 
 from .art import Appearance, make_title_background, slug
+from .looks import BUILTIN as BUILTIN_LOOKS, Look
 from .screenplay import Scene, Screenplay
 from .voice import estimate_seconds
 
@@ -37,13 +38,6 @@ EDGE_MARGIN = 0.15       # speech boxes stay this far inside the screen edge
 VIEW_H = 9.4             # height that exactly fills the camera view at depth -1 (fov 75, camera at z=5)
 GAP_S = {"say": 0.4, "narr": 0.3}
 OFFSCREEN = 9.5
-
-# speech box (Words) parameters, all explicit
-BUBBLE = dict(size=0.32, wrap=6.4, fill="0xffffff", alpha=1, ink="0x1b1f2a", border="0x1b1f2a", border_w=0.04, pad=0.22, tail=0.3)
-CAPTION = dict(size=0.3, wrap=11, fill="0x0a0c12", alpha=0.8, ink="0xffffff", border="0x0a0c12", border_w=0, pad=0.2, tail=0)
-TITLE = dict(size=0.8, wrap=12, fill="0x000000", alpha=0, ink="0xffffff", border="0x000000", border_w=0, pad=0.1, tail=0)
-SUBTITLE = dict(size=0.38, wrap=12, fill="0x000000", alpha=0, ink="0xffffff", border="0x000000", border_w=0, pad=0.1, tail=0)
-
 
 @dataclass
 class Shot:
@@ -85,7 +79,7 @@ def _label(text: str) -> str:
 
 
 def _ident(prefix: str, name: str, used: set) -> str:
-    base = prefix + (re.sub(r"\W+", "_", name).strip("_") or "x")
+    base = prefix + (re.sub(r"[^A-Za-z0-9]+", "_", name).strip("_") or "x")      # CDRCA aliases are ASCII
     ident, k = base, 2
     while ident in used:
         ident, k = f"{base}_{k}", k + 1
@@ -93,9 +87,10 @@ def _ident(prefix: str, name: str, used: set) -> str:
     return ident
 
 
-def _words(x, y, ax, ay, p, z=0.01, limit=0.0, limit_y=0.0) -> str:
-    return (f'Words({_n(x)}, {_n(y)}, {_n(ax)}, {_n(ay)}, {_n(p["size"])}, {_n(p["wrap"])}, {p["fill"]}, {_n(p["alpha"])}, '
-            f'{p["ink"]}, {p["border"]}, {_n(p["border_w"])}, {_n(p["pad"])}, {_n(p["tail"])}, {_n(z)}, {_n(limit)}, {_n(limit_y)})')
+def _words(x, y, look: Look, z=0.01, limit=0.0, limit_y=0.0) -> str:
+    """A Words prop (see cdrca-lib/atoms.cdrca) drawn with a text look; every argument is an explicit number."""
+    return (f"Words({_n(x)}, {_n(y)}, {_n(look.ax)}, {_n(look.ay)}, {_n(look.size)}, {_n(look.wrap)}, 0x{look.fill:06x}, {_n(look.alpha)}, "
+            f"0x{look.ink:06x}, 0x{look.border:06x}, {_n(look.border_w)}, {_n(look.pad)}, {_n(look.tail)}, {_n(z)}, {_n(limit)}, {_n(limit_y)})")
 
 
 def _picture(src, x, y, w, h, z, speed, alt="", hz=0) -> str:
@@ -152,10 +147,11 @@ def compile_title(index: int, sp: Screenplay, scenes_dir: Path, top_rgb, bottom_
     bg = make_title_background(top_rgb, bottom_rgb, assets / "bg_title.png")
     sc = _Script()
     sc.prop("backdrop", _picture(f"../assets/{bg.name}", 0, 0, VIEW_H * 16 / 9, VIEW_H, -1, 0))
-    sc.prop("title", _words(0, -0.3, 0.5, 0.5, TITLE))
-    sc.prop("subtitle", _words(0, -1.5, 0.5, 0.5, SUBTITLE))
-    cmds = {"title": [("rate", "0"), ("say", f'"{_q(sp.title)}"')]}
-    if sp.subtitle:
+    tl, sl = sp.looks.get("title", BUILTIN_LOOKS["title"]), sp.looks.get("subtitle", BUILTIN_LOOKS["subtitle"])
+    sc.prop("title", _words(tl.x if tl.fixed else 0, tl.y if tl.fixed else -0.3, tl))
+    sc.prop("subtitle", _words(sl.x if sl.fixed else 0, sl.y if sl.fixed else -1.5, sl))
+    cmds = {"title": [("rate", "0"), ("say", f'"{_q(sp.title)}"')] if tl.show else [("modifyMesh", '""')]}
+    if sp.subtitle and sl.show:
         cmds["subtitle"] = [("rate", "0"), ("say", f'"{_q(sp.subtitle)}"')]
     sc.step(seconds, cmds)
     path = scenes_dir / "s00_title.cdrca"
@@ -195,16 +191,29 @@ def compile_scene(index: int, scene: Scene, sp: Screenplay, apps: Dict[str, Appe
 
     used: set = {"backdrop", "caption"}
     ident = {c: _ident("c_", c, used) for c in present_first}
-    boxes: Dict[Tuple[str, float], str] = {}
+    boxes: Dict[Tuple[str, str, float], Tuple[str, Look]] = {}     # (speaker or "", look name, x) -> (prop alias, look)
+    notes: List[str] = []
     sc = _Script()
     audio: List[Tuple[float, Path]] = []
     srt: List[Tuple[float, float, str, str]] = []
 
-    def box_for(who: str) -> str:
-        key = (who, round(pos.get(who, 0.0), 2))
+    def box_for(who: str, look_name: str, look: Look) -> str:
+        """One Words prop per place text can appear: a fixed look has one; a look anchored to a speaker has one per standing spot."""
+        if look.fixed or not who:
+            key = ("", look_name, 0.0)
+        else:
+            key = (who, look_name, round(pos.get(who, 0.0), 2))
         if key not in boxes:
-            boxes[key] = _ident("say_", f"{who}_{len(boxes) + 1}", used)
-        return boxes[key]
+            if key[0] == "" and look_name == "caption":
+                alias = "caption"
+            elif key[0] == "":
+                alias = _ident("txt_", look_name, used)
+            elif look_name == "bubble":
+                alias = _ident("say_", f"{who}_{len(boxes) + 1}", used)
+            else:
+                alias = _ident("say_", f"{who}_{look_name}_{len(boxes) + 1}", used)
+            boxes[key] = (alias, look)
+        return boxes[key][0]
 
     def walk(moves: Dict[str, float]):
         longest, cmds = 0.0, {}
@@ -213,17 +222,23 @@ def compile_scene(index: int, scene: Scene, sp: Screenplay, apps: Dict[str, Appe
             cmds[ident[c]] = [("moveTo", _n(dest))]
         return longest, cmds
 
+    def skipped(b, why: str) -> None:
+        notes.append(f"line {b.line}: {b.who} {why}, so [{b.kind.upper()}] was skipped")
+
     for j, b in enumerate(scene.beats):
         if b.kind in ("say", "narr"):
             wav, dur = line_info.get(j, (None, estimate_seconds(b.text, wpm)))
             who = b.who if b.kind == "say" else ""
+            look_name = sp.look_name(b)
+            look = sp.look_of(b)
             cps = max(1.0, len(b.text) / max(0.3, dur * 0.9))            # reveal the whole text a little before the voice ends
             cmds: Dict[str, List[Tuple[str, str]]] = {}
             if who:
+                if who not in pos:
+                    notes.append(f"line {b.line}: {who} speaks while not on stage")
                 cmds[ident[who]] = [("flap", '""')]
-                cmds[box_for(who)] = [("rate", _n(cps)), ("say", f'"{_q(b.text)}"')]
-            else:
-                cmds["caption"] = [("rate", _n(cps)), ("say", f'"{_q(b.text)}"')]
+            if look.show:
+                cmds[box_for(who, look_name, look)] = [("rate", _n(cps)), ("say", f'"{_q(b.text)}"')]
             t0 = sc.seconds
             if wav is not None:
                 audio.append((t0, wav))
@@ -235,8 +250,11 @@ def compile_scene(index: int, scene: Scene, sp: Screenplay, apps: Dict[str, Appe
         elif b.kind == "hop":
             if b.who in pos:
                 sc.step(0.5, {ident[b.who]: [("hop", "0.5")]})
+            else:
+                skipped(b, "is not on stage")
         elif b.kind == "enter":
             if b.who in order:
+                skipped(b, "is already on stage")
                 continue
             order.append(b.who)
             pos[b.who] = b.nums[0]
@@ -246,12 +264,14 @@ def compile_scene(index: int, scene: Scene, sp: Screenplay, apps: Dict[str, Appe
             pos[b.who] = dest
         elif b.kind == "exit":
             if b.who not in order:
+                skipped(b, "is not on stage")
                 continue
             longest, cmds = walk({b.who: b.nums[0]})
             sc.step(longest + 0.2, cmds)
             order.remove(b.who); pos.pop(b.who)
         elif b.kind == "move":
             if b.who not in pos:
+                skipped(b, "is not on stage")
                 continue
             dest = clear_spot(b.nums[0], [x for c, x in pos.items() if c != b.who])
             longest, cmds = walk({b.who: dest})
@@ -272,11 +292,18 @@ def compile_scene(index: int, scene: Scene, sp: Screenplay, apps: Dict[str, Appe
         w = h * (_image_aspect(base) if base.exists() else 400 / 720)
         talk = f"../assets/{slug(c)}_talk.png" if (assets / f"{slug(c)}_talk.png").exists() else ""
         sc.prop(ident[c], _picture(f"../assets/{slug(c)}.png", x0.get(c, OFFSCREEN), FEET_Y + h / 2, w, h, 0, WALK_SPEED, talk, FLAP_HZ if talk else 0))
-    for (who, x), alias in boxes.items():
-        h = BASE_HEIGHT * apps[who].height_scale
-        sc.prop(alias, _words(max(-4.0, min(4.0, x)), FEET_Y + h + 0.2, 0.5, 0, BUBBLE, limit=round(view_half_w - EDGE_MARGIN, 3), limit_y=round(VIEW_HALF_H - EDGE_MARGIN, 3)))
-    sc.prop("caption", _words(0, -3.5, 0.5, 0, CAPTION))
+    for (who, _look_name, x), (alias, look) in boxes.items():
+        limit = round(view_half_w - EDGE_MARGIN, 3) if look.clamp else 0.0
+        limit_y = round(VIEW_HALF_H - EDGE_MARGIN, 3) if look.clamp else 0.0
+        if look.fixed:
+            px, py = look.x, look.y
+        elif who:
+            h = BASE_HEIGHT * apps[who].height_scale
+            px, py = max(-4.0, min(4.0, x)), FEET_Y + h + 0.2
+        else:                                   # an unanchored look used for narration: where the caption goes
+            px, py = 0.0, -3.5
+        sc.prop(alias, _words(px, py, look, limit=limit, limit_y=limit_y))
 
     path = scenes_dir / f"{name}.cdrca"
     path.write_text(sc.text(scene.heading), encoding="utf-8")
-    return Shot(index, name, path, sc.seconds, INTRO_S, audio, srt, mood=scene.backdrop or "gen:street:day")
+    return Shot(index, name, path, sc.seconds, INTRO_S, audio, srt, mood=scene.backdrop or "gen:street:day", notes=notes)

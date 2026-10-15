@@ -28,3 +28,9 @@ frames/
 # notes for the next working session: never publish
 /handoff/
 /HANDOFF*.md
+
+# CI test reports (written by tools/ci_report.py during a run)
+/reports/
+/ci-report.md
+*_pytest_output.log
+pytest_output.log

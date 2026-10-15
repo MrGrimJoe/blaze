@@ -132,19 +132,38 @@ Rules worth knowing:
 - Characters never end up standing on each other: Blaze moves a destination to the nearest free spot.
 - Walking takes distance divided by 2.4 units per second; the rest of the scene waits for the walk to finish.
 
-Words where a number belongs are errors, because Blaze does not guess what "left" means:
+Words where a number belongs are errors, because Blaze does not guess what "left" means, and so are mistakes in names and
+commands, because Blaze does not guess what you meant:
 
 ```
-[ENTER JOE left] needs 2 exact number(s) at the end (positions are x values, not words)
-[MOVE JOE] needs 1 exact number(s) at the end (positions are x values, not words)
-[PAUSE long] needs 1 exact number(s) at the end (positions are x values, not words)
-unknown command [FLY A 3]
+line 2: [ENTER JOE left] needs 2 exact number(s) at the end (positions are x values, not words)
+line 3: unknown command [MOV JOE 3]. The commands are ENTER, EXIT, MOVE, HOP, PAUSE (did you mean MOVE?)
+line 4: 'JOHM' is not a character in this screenplay (did you mean John?). Add it with CAST:, or let it speak or ENTER first.
+line 5: 'Later that day' is not a declared character, so this line is not dialogue. ...
 ```
 
-(The last one is a warning, not an error: the line is skipped and the video still renders. The page shows it under *Heads up*.)
+A speaker is a character declared with `CAST:`, or a name written in CAPITALS. A line such as `Later that day: Mary went home` is
+therefore an error, not a new character called "Later that day"; write narration with `>`. Names with lower-case letters,
+accents or another script (`Zoë`, `McGee`) are declared first with `CAST: "Zoë" gender=f`.
 
-Things that are not supported, such as `STYLE:`, `CAMERA:` and `WEATHER:` lines, give a warning too and are skipped, so a
-screenplay written for something fancier still renders.
+Things that are not supported, such as `STYLE:`, `CAMERA:` and `WEATHER:` lines, give a warning and are skipped, so a
+screenplay written for something fancier still renders. A command that cannot happen (moving someone who is not on stage) is
+skipped with a warning that names the line.
+
+## Two ways to write the same thing
+
+`JOHN: Did you hear that?` is shorthand for the explicit statement `SPEAK JOHN "Did you hear that?"`, and `> It was late.` is
+shorthand for `NARRATE "It was late."`. Use whichever you like; they can be mixed. `python blaze.py expand story.txt` shows
+the explicit form of a whole screenplay. The explicit form is also where you choose how text looks:
+
+```
+CAST: JOHN gender=m voice=espeak:en-gb+m3
+DEFINE LOOK shout base=bubble size=0.55 ink=0xc0141e
+SCENE: street
+SPEAK JOHN "Stop right there!" look=shout
+```
+
+See the [screenplay reference](../reference/screenplay.md) for text looks and the voice keys.
 
 ## A complete example
 

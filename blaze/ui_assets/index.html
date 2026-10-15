@@ -67,6 +67,16 @@
   .scenes li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
   .scenes li span:last-child { color: var(--mute); white-space: nowrap; }
   .empty { color: var(--mute); }
+  #voicebox { margin-top: 28px; }
+  #voicebox h2 { margin-top: 0; }
+  .voices { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .voices li { display: grid; grid-template-columns: 5.5em minmax(0, 1fr) auto 4.2em; gap: 8px; align-items: center; }
+  .voices .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .voices select { border-bottom: 1px solid var(--line); border-radius: 0; padding: 4px 2px; min-width: 0; width: 100%; color: var(--ink); }
+  .voices input { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; padding: 4px 2px; color: var(--ink); }
+  .voices input::placeholder { color: var(--mute); }
+  .voices .quiet:disabled { opacity: .35; cursor: default; }
+  .voices .hint { grid-column: 1 / -1; color: var(--mute); font-size: 13px; margin: 0; }
   .notes { margin: 0; padding: 0; list-style: none; color: var(--warn); font-size: 14px; }
   .notes li { padding: 3px 0; }
 
@@ -159,13 +169,18 @@ MARY: It is just the wind.
     <aside>
       <div id="result"></div>
       <div id="outline"></div>
+      <div id="voicebox"></div>
       <details>
         <summary>Screenplay format</summary>
 <pre>TITLE: and SUBTITLE: name the video
 CAST: NAME gender=m|f top=0xd64036 …
+      voice=espeak:en-us+m3 rate=140
+DEFINE LOOK shout size=0.6 ink=0xff2020
 SCENE: a label for you
 BACKDROP: gen:street:night_rain
 NAME: a spoken line
+NAME (look=shout): a line with a look
+SPEAK NAME "the same, written out"
 &gt; a narrator line
 [ENTER NAME 9.5 3]  walk in to x
 [MOVE NAME 0]  [EXIT NAME 9.5]
@@ -226,13 +241,75 @@ function renderOutline(c) {
   el.innerHTML = h;
 }
 
+// ---- voices: one row per character; choosing writes voice= into that character's CAST line
+let engines = [], players = {};
+function setCastKey(label, key, value) {
+  const lines = text.value.split("\n"), want = label.replace(/^"|"$/g, "").toLowerCase();
+  const at = lines.findIndex((l) => {
+    const m = l.match(/^\s*CAST\s*:\s*("[^"]*"|\S+)/i);
+    return m && m[1].replace(/^"|"$/g, "").toLowerCase() === want;
+  });
+  if (at < 0) {
+    if (!value) return;
+    let top = 0;
+    while (top < lines.length && /^\s*(TITLE|SUBTITLE|CAST)\s*:/i.test(lines[top])) top++;
+    lines.splice(top, 0, `CAST: ${label} ${key}=${value}`);
+  } else {
+    const m = lines[at].match(/^(\s*CAST\s*:\s*)("[^"]*"|\S+)(.*)$/i);
+    let rest = m[3].replace(new RegExp("\\s" + key + "=\\S*", "i"), "");
+    if (value) rest += " " + key + "=" + value;
+    lines[at] = (m[1] + m[2] + rest).replace(/\s+$/, "");
+  }
+  text.value = lines.join("\n");
+  check();
+}
+function voiceOptions(current) {
+  let h = `<option value="auto">Automatic</option><option value="off">Silent</option>`, seen = current === "auto" || current === "off";
+  for (const e of engines) for (const v of e.voices) { if (v.id === current) seen = true; }
+  for (const e of engines) {
+    if (!e.voices.length) continue;
+    h += `<optgroup label="${esc(e.engine)}">` + e.voices.map((v) => `<option value="${esc(v.id)}"${v.id === current ? " selected" : ""}>${esc(v.label)}</option>`).join("") + `</optgroup>`;
+  }
+  if (!seen) h += `<option value="${esc(current)}" selected>${esc(current)} (not installed here)</option>`;
+  return h.replace(`<option value="${current}">`, `<option value="${current}" selected>`);
+}
+function renderVoices(c) {
+  const el = $("voicebox");
+  if (!c || !c.ok || !c.voices || !Object.keys(c.voices).length) { el.innerHTML = ""; return; }
+  const none = !engines.some((e) => e.available);
+  let h = `<h2>Voices</h2><ul class="voices">`;
+  for (const [name, v] of Object.entries(c.voices)) {
+    h += `<li data-label="${esc(v.label)}" data-name="${esc(name)}"><span class="who" title="${esc(name)}">${esc(name)}</span>
+      <select aria-label="Voice for ${esc(name)}">${voiceOptions(v.voice)}</select>
+      <button class="quiet play" ${v.voice === "auto" || v.voice === "off" ? "disabled" : ""} aria-label="Play ${esc(name)}'s voice">Play</button>
+      <input type="number" min="40" max="400" placeholder="wpm" value="${v.rate || ""}" aria-label="Speed for ${esc(name)} in words per minute"></li>`;
+  }
+  h += `</ul>`;
+  if (none) h += `<p class="hint">No voice engine is installed, so videos will be silent. Install espeak-ng (or pip install pyttsx3, or Piper), then reload.</p>`;
+  el.innerHTML = h;
+  el.querySelectorAll("li").forEach((li) => {
+    const label = li.dataset.label, sel = li.querySelector("select"), rate = li.querySelector("input"), play = li.querySelector(".play");
+    sel.onchange = () => setCastKey(label, "voice", sel.value === "auto" ? "" : sel.value);
+    rate.onchange = () => setCastKey(label, "rate", rate.value && +rate.value >= 40 && +rate.value <= 400 ? String(Math.round(+rate.value)) : "");
+    play.onclick = async () => {
+      play.textContent = "…"; play.disabled = true;
+      try {
+        const r = await post("/api/voice-preview", { voice: sel.value, rate: +rate.value || 0, text: "Hello, I am " + li.dataset.name + ". This is how I sound." });
+        if (r.error) status.innerHTML = `<span class="err">${esc(r.error)}</span>`;
+        else { if (players.cur) players.cur.pause(); players.cur = new Audio(r.url); players.cur.play(); renderStatus(lastCheck); }
+      } catch (e) { status.innerHTML = `<span class="err">Blaze could not be reached.</span>`; }
+      play.textContent = "Play"; play.disabled = false;
+    };
+  });
+}
+
 function check() {
   clearTimeout(timer);
   timer = setTimeout(async () => {
     store.set("blaze.text", text.value);
-    if (!text.value.trim()) { lastCheck = null; renderStatus(null); renderOutline(null); makeBtn.disabled = true; return; }
+    if (!text.value.trim()) { lastCheck = null; renderStatus(null); renderOutline(null); renderVoices(null); makeBtn.disabled = true; return; }
     try { lastCheck = await post("/api/check", { text: text.value }); } catch (e) { return; }
-    renderStatus(lastCheck); renderOutline(lastCheck);
+    renderStatus(lastCheck); renderOutline(lastCheck); renderVoices(lastCheck);
     makeBtn.disabled = !lastCheck.ok || (job && job.state === "running");
   }, 250);
 }
@@ -314,6 +391,7 @@ addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye", "{}"
 
 (async () => {
   try { const s = await (await fetch("/api/status")).json(); sample = s.sample || ""; showAi(!!s.ai); } catch (e) {}
+  try { engines = (await (await fetch("/api/voices")).json()).engines || []; } catch (e) {}
   text.value = store.get("blaze.text") || "";
   makeBtn.disabled = true; check(); text.focus();
 })();
