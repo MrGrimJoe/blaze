@@ -1,0 +1,51 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.15, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/blaze/blaze
+configfile: pytest.ini
+collected 19 items
+
+tests/test_blender.py .................F.                                [100%]
+
+=================================== FAILURES ===================================
+________________________ test_blender_assets_end_to_end ________________________
+
+fixtures = PosixPath('/tmp/pytest-of-runner/pytest-0/blend0')
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_blender_assets_end_to_end0')
+
+    @pytest.mark.skipif(not (HAVE_BLENDER and RENDER_SCRIPT.exists()), reason="needs Blender + the renderer")
+    def test_blender_assets_end_to_end(fixtures, tmp_path):
+        import shutil
+        if not (shutil.which("node") and shutil.which("ffmpeg")):
+            pytest.skip("needs node + ffmpeg")
+        r = subprocess.run(["node", "-e", "require('playwright')"], cwd=str(RENDER_SCRIPT.parents[2]), capture_output=True)
+        if r.returncode != 0:
+            pytest.skip("playwright not installed")
+        lib = Library([tmp_path / "library"])
+        lib.add_character(fixtures / "robot.blend", "robo", samples=4)
+        lib.add_backdrop(fixtures / "shot.blend", "lab", samples=2, size=(640, 360))
+>       res = make("CAST: ROBO = asset:robo\nSCENE: x\nBACKDROP: lab\nROBO: Hello.\nMARY: Hi!\n", tmp_path / "o.mp4",
+                   Options(width=320, height=180, fps=8, voice="off", library=tmp_path / "library", progress=lambda m: None))
+
+tests/test_blender.py:172: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+blaze/pipeline.py:287: in make
+    sp, _ = create_project(text, project, opts, base_dir)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+blaze/pipeline.py:86: in create_project
+    pairs = art.parse_pairs(desc) if desc.strip() else {}
+            ^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+text = '= asset:robo'
+
+    def parse_pairs(text: str) -> Dict[str, str]:
+        """'a=1 b=0xff c=x' -> {'a': '1', 'b': '0xff', 'c': 'x'}; anything that is not key=value is an error."""
+        out: Dict[str, str] = {}
+        for tok in (text or "").split():
+            if "=" not in tok:
+>               raise ValueError(f"expected key=value, got {tok!r}")
+E               ValueError: expected key=value, got 'asset:robo'
+
+blaze/art.py:137: ValueError
+----- generated xml file: /home/runner/work/blaze/blaze/reports/pytest.xml -----
+======================== 1 failed, 18 passed in 17.37s =========================
