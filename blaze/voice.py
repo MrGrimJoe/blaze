@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,12 +55,24 @@ def wav_seconds(path: Path) -> float:
         return w.getnframes() / float(w.getframerate())
 
 
+ENGINE_TIMEOUT = 120      # seconds one line of speech (or one ffmpeg conversion) may take before it is called stuck
+_SYSTEM_VOICE_LOCK = threading.Lock()   # Windows SAPI / macOS NSSpeech engines are not safe to run from several threads at once
+
+
+def _run(cmd, what: str, **kw) -> subprocess.CompletedProcess:
+    """subprocess.run with a limit: a voice engine that never returns is an error naming it, not a build that never ends."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=ENGINE_TIMEOUT, **kw)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f"{what} did not finish within {ENGINE_TIMEOUT} s and was stopped") from None
+
+
 def _normalise(src: Path, dst: Path, tempo: float = 1.0) -> None:
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src)]
     if abs(tempo - 1.0) > 0.02:
         cmd += ["-filter:a", "atempo=%.3f" % max(0.5, min(2.0, tempo))]
     cmd += ["-ar", str(SAMPLE_RATE), "-ac", "1", "-sample_fmt", "s16", str(dst)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = _run(cmd, "ffmpeg converting audio")
     if r.returncode != 0:
         raise RuntimeError("ffmpeg could not normalise audio: " + r.stderr[-300:])
 
@@ -154,8 +167,8 @@ class EspeakVoice:
         if profile.pitch >= 0:
             pitch = profile.pitch
         raw = out_wav.with_suffix(".raw.wav")
-        r = subprocess.run([self.binary, "-v", voice, "-p", str(pitch), "-s", str(profile.rate or self.wpm),
-                            "-w", str(raw), text], capture_output=True, text=True)
+        r = _run([self.binary, "-v", voice, "-p", str(pitch), "-s", str(profile.rate or self.wpm),
+                  "-w", str(raw), text], "espeak-ng")
         if r.returncode != 0:
             raise RuntimeError("espeak-ng failed: " + (r.stderr or "")[-300:])
         _require_audio(raw, "espeak-ng", f"voice {voice!r}")
@@ -218,6 +231,10 @@ class Pyttsx3Voice:
     def synth(self, text: str, profile: Profile, out_wav: Path) -> Optional[float]:
         if not _speakable(text):
             return None
+        with _SYSTEM_VOICE_LOCK:
+            return self._synth_locked(text, profile, out_wav)
+
+    def _synth_locked(self, text: str, profile: Profile, out_wav: Path) -> Optional[float]:
         import pyttsx3
         engine = pyttsx3.init()
         voices = engine.getProperty("voices") or []
@@ -297,8 +314,7 @@ class PiperVoice:
         raw = out_wav.with_suffix(".raw.wav")
         err = ""
         for flag in ("--output_file", "--output-file"):                      # the two spellings of Piper's output option
-            r = subprocess.run([self.binary, "--model", str(models[vid]), flag, str(raw)], input=text, capture_output=True,
-                               text=True, encoding="utf-8")
+            r = _run([self.binary, "--model", str(models[vid]), flag, str(raw)], "piper", input=text, encoding="utf-8")
             if r.returncode == 0 and raw.exists():
                 break
             err = (r.stderr or "")[-300:]

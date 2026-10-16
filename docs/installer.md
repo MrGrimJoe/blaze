@@ -62,8 +62,9 @@ Then, on a clean Windows machine in the same workflow run, it:
 3. imports everything in the bundled Python, and starts the Windows voice engine;
 4. **opens Blaze Studio from the install and runs the offline demo through its window** (`studio_app.pyw --selftest`);
 5. **starts the installed app exactly as the shortcut does and uses it**: checks the page, chooses a provider (and proves the key
-   is saved in your own folder, not in the install folder), makes a real video, streams it back as a player would, and tells the
-   page to close and proves the app stops by itself (`installer/smoke_installed.py`);
+   is saved in your own folder, not in the install folder), checks that your library is in your own folder, adds a character and
+   removes it, makes a real video, checks that it comes with the timeline Running mode draws, streams it back as a player would, and
+   tells the page to close and proves the app stops by itself (`installer/smoke_installed.py`);
 6. photographs the installed app's page in real Chrome;
 7. uninstalls, and checks the program is gone and `Videos\Blaze` is kept.
 

@@ -96,6 +96,7 @@ whole log, without downloading anything. The log holds the output of `pytest -v 
 | [`tests/test_voices.py`](../tests/test_voices.py) | a voice per character: espeak-ng, system voices, Piper (a stand-in program that runs on every system, and the real one on CI), empty-audio detection, the voice endpoints of the page, the CLI |
 | [`tests/test_voice_engines.py`](../tests/test_voice_engines.py) | the voice engines on the system the tests run on |
 | [`tests/test_ui.py`](../tests/test_ui.py) | the page's server and what it returns |
+| [`tests/test_ui_library_and_modes.py`](../tests/test_ui_library_and_modes.py) | the library panel's server side (add a PNG, a talking mouth, a backdrop, a `.blend` through a stand-in for Blender, refusals, removal that cannot leave the library folder, the `asset=` check) and the timeline Running mode draws |
 | [`tests/test_ai_animation.py`](../tests/test_ai_animation.py) | the AI writer, with scripted stand-ins for the providers |
 | [`tests/test_blender.py`](../tests/test_blender.py) | the Blender bridge (a stand-in everywhere, real Blender on its own job) |
 | [`tests/test_launcher.py`](../tests/test_launcher.py) | the launcher the installer's shortcut runs |
@@ -105,7 +106,7 @@ whole log, without downloading anything. The log holds the output of `pytest -v 
 | [`tests/test_license.py`](../tests/test_license.py) | the licence files |
 | `studio/tests/` | the desktop studio |
 | `cdrca/tests/` | CDRCA's transpiler and renderer |
-| [`tools/screens/ui_screens.js`](../tools/screens/ui_screens.js) | not a test suite, but it **asserts** as it photographs: an error screen must show the error, choosing a voice must write it into the screenplay and Play must work |
+| [`tools/screens/ui_screens.js`](../tools/screens/ui_screens.js) | not a test suite, but it **asserts** as it photographs: an error screen must show the error, choosing a voice must write it into the screenplay and Play must work, adding a character must clear the "not in the library" message, Editor mode must hide the side panel and mark the error line, and Running mode must draw a scenes row and a row per speaker |
 
 ## Mistakes the tests were written to catch
 

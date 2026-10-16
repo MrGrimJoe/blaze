@@ -32,6 +32,55 @@ Blaze is a **screenplay-to-video compiler**, not a video generator. Nothing is i
 
 You can open and edit the generated CDRCA scripts and render again, so nothing is a black box.
 
+## The language in one minute
+
+A screenplay has two layers. The **shorthand** is what you normally write; the **core** is what it means. `python blaze.py expand`
+prints the core, so you never have to guess what a line does (the second block is real output, not a sketch):
+
+What you write (shorthand):
+
+```
+TITLE: The Lost Key
+CAST: JOHN gender=m hat=fedora voice=espeak:en-gb+m3
+CAST: MARY gender=f dress=1
+DEFINE LOOK shout size=0.55 ink=0xc0141e
+
+INT. STREET - NIGHT
+BACKDROP: gen:street:night_rain
+JOHN: Did you hear that?
+MARY (look=shout): It is just the wind!
+> Thunder rolled across the street.
+[MOVE JOHN 3] [HOP MARY]
+```
+
+What it means (`python blaze.py expand story.txt`):
+
+```
+TITLE: The Lost Key
+CAST: JOHN gender=m hat=fedora voice=espeak:en-gb+m3
+CAST: MARY gender=f dress=1
+DEFINE LOOK shout size=0.55 ink=0xc0141e
+
+SCENE: STREET - NIGHT
+BACKDROP: gen:street:night_rain
+SPEAK JOHN "Did you hear that?"
+SPEAK MARY "It is just the wind!" look=shout
+NARRATE "Thunder rolled across the street."
+MOVE JOHN 3
+HOP MARY
+```
+
+The rules, all of them enforced before anything is drawn:
+
+- **A character is `CAST: NAME key=value ...`**: a name, then `key=value` pairs. The old `CAST: ROBO = asset:robo` form is gone; write
+  `CAST: ROBO asset=robo`. A speaker must be declared with `CAST:` or written in CAPITALS, so `Later that day: ...` is an error, not a new character.
+- **Every value is exact.** Positions are numbers (`[MOVE JOHN 3]`, never `left`), looks are `key=value`, places and moods are fixed names
+  (`gen:street:night_rain`). Anything else is an error that names the line and says what to write instead.
+- **A typo is never a new thing.** `[MOV JOHN 3]` is `unknown command ... (did you mean MOVE?)`; `[MOVE JOHM 3]` is `'JOHM' is not a character`.
+- **Brackets in speech stay speech** unless they are commands: `JOE: I put it in [the box]` is just text.
+
+Every line type, key and error is in the [screenplay reference](docs/reference/screenplay.md).
+
 ## What it can do
 
 | | |
@@ -45,7 +94,7 @@ You can open and edit the generated CDRCA scripts and render again, so nothing i
 | **Subtitles** | An `.srt` file for every video. |
 | **Output** | mp4 at the size and frame rate you choose (640x360 for quick drafts, 1920x1080 for the final). |
 | **Editable** | Every video leaves a project folder with the generated CDRCA scripts, assets and audio. Change a number, run `blaze build`. |
-| **A page and a command line** | `python blaze.py ui` opens a minimal page: write, see it understood as you type, make, watch, download. Or script it with `blaze make`. |
+| **A page and a command line** | `python blaze.py ui` opens a page with three modes (**Editor**, **Smart**, **Running**, see below): write, see it understood as you type, add your own characters, make, watch on a timeline, download. Or script it with `blaze make`. |
 | **Blaze Studio** | A desktop window: describe a video loosely and it plans the shots, draws, renders and joins them. Includes an **offline demo** that needs no AI, no key and no GPU. |
 | **Optional AI** | Describe a story and let your own Anthropic, Gemini or OpenAI account write the screenplay: one short scene, or a whole multi-scene story planned and checked step by step. No provider is chosen for you. |
 
@@ -57,11 +106,29 @@ This is the bundled example, `tests/fixtures/sample_story.txt`, rendered by Blaz
 |---|---|---|
 | ![](docs/img/scene-street.png) | ![](docs/img/scene-warehouse.png) | ![](docs/img/scene-beach.png) |
 
+## Three modes
+
+`python blaze.py ui` opens one page with three tabs. They share the same screenplay, so you can move between them at any time.
+
+| Mode | For | What you get |
+|---|---|---|
+| **Editor** | writing code | Just the screenplay: line numbers, the line with the mistake marked in red and named at the bottom, Tab to indent. No side panel. |
+| **Smart** | writing with help | The page above: the cast, scenes, warnings and a voice for each character update as you type; your own characters and backdrops live here; optional AI writer. |
+| **Running** | watching the result | The finished video with a timeline under it: a row of scenes, a row per speaker with a block for every line, a playhead you can drag, a list of lines you can click, speed and zoom. A dot on the tab tells you a new video is ready. The last video comes back after a reload. |
+
+**Your own characters.** In Smart, **Add character** takes a PNG with a transparent background, or a `.blend` model that Blender renders
+for you (front view, with `talk` and `blink` shape keys driving the mouth and eyes). **+ mouth** adds an open-mouth picture to a
+character you already have; **Use** writes `CAST: ROBO asset=robo` into the screenplay. A `CAST` line that names a character you have not
+added is reported on its own line while you type. `.blend` files need [Blender](https://blender.org) installed; PNGs do not
+([Tutorial 3](docs/tutorials/03-your-own-art.md)).
+
 ## Start in three minutes
 
-**On Windows the easiest way is the installer**: download `Blaze_Setup_<version>.exe` (built by GitHub Actions, see
-[docs/installer.md](docs/installer.md)), run it, and open **Blaze** from the Start menu. Python, Node.js, ffmpeg, the browser and
-Windows voices are all inside it, and no administrator rights are needed.
+**On Windows the easiest way is the installer**: run it and open **Blaze** from the Start menu. Python, Node.js, ffmpeg, the
+browser and Windows voices are all inside it, and no administrator rights are needed. It is built by GitHub Actions
+(**Actions → Build Blaze Installer → a run → Artifacts → `blaze-installer`**, or a GitHub Release for a `v*` tag). Only a build that is
+full size (about 280 MB) **and** whose installed copy then made a video on a clean machine is published under that name; a build that
+failed either check leaves only `blaze-installer-unverified`, which you should not use. Details: [docs/installer.md](docs/installer.md).
 
 **From source** (any system) you need **Python 3.9+**, **Node.js** and **ffmpeg**. Voices need **espeak-ng** (or `pip install pyttsx3` for the system voices on Windows and macOS), or [Piper](docs/tutorials/04-voices-timing-subtitles.md) for natural offline voices; `python blaze.py voices` shows what is installed.
 
@@ -118,11 +185,12 @@ characters face the viewer. Features CDRCA itself would need first are listed as
 
 ## Tests and CI
 
-**Every test runs on GitHub Actions on every push**, on Linux, **Windows** and macOS: Blaze's own tests (real renders, the page's
+**Tests run on GitHub Actions on every push**, on Linux, **Windows** and macOS (the badges above are the live result, and they can be red): Blaze's own tests (real renders, the page's
 server, the launcher, the workflow files), the desktop studio's, CDRCA's, the real Blender, the real Piper neural voices, the
 documentation, and the Windows installer ([`ci.yml`](.github/workflows/ci.yml),
 [`build-blaze-installer.yml`](.github/workflows/build-blaze-installer.yml), [`screenshots.yml`](.github/workflows/screenshots.yml)).
-The badges at the top are the live result.
+A hung job is stopped by a timeout instead of running for hours, and Blaze itself bounds every render, encode and voice call, so a stuck
+renderer is a message naming it, not a build that never ends.
 
 A bare "N passed" says little, so each run ends with a **Test report** on its summary page: a row per test run, the counts per
 test file, and every skipped test with its reason. A test may only be skipped for a reason its job lists, so the Windows
@@ -144,11 +212,12 @@ python tools/check_docs.py                      # links work, every screenplay i
 What is verified, and where, is written down in **[docs/STATUS.md](docs/STATUS.md)**; this is the short version.
 
 - **Checked on Linux:** the language, the compiler, the voices (espeak-ng, `pyttsx3`, and the real Piper with a real voice model),
-  the page in a browser (every screen is photographed with assertions), the installer's end-to-end check run from source, the studio's tests, and CDRCA's tests.
-- **Only CI can check, and has not yet run with the current code:** everything on **Windows and macOS**, including the Windows
-  system (SAPI) voices chosen per character, the real Piper on Windows, the Windows installer built and installed with the new
-  files, and the screenshots in real Chrome. They are all set up as workflows; the first run may need small fixes, and a failing
-  job leaves its log on a `ci-debug-logs-*` branch.
+  the page in a browser (every screen is photographed with assertions), its three modes and your own characters (a PNG added from the page appears in a real rendered video), the installer's end-to-end check run from source, the studio's tests, and CDRCA's tests.
+- **Run on GitHub, and not green yet (2026-10-15):** the installer builds at full size and installs with every file in place, but its
+  end-to-end step (make a video with the installed app) and the real-Chrome photograph of its page **fail**, so no installer is
+  published as verified. The `tests` workflow also failed on its last run after hanging for hours on Windows, which is what the new
+  timeouts are for. The Windows system (SAPI) voices, real Piper on Windows and macOS are in the same state. A failing job leaves its
+  log on a `ci-debug-logs-*` branch.
 - **Not done:** removing Blaze Studio, a JavaScript-only core, and a few things that need CDRCA to change. The reasons and the
   steps are in [docs/STATUS.md](docs/STATUS.md).
 - **Never tested live:** the AI writer and Studio's own-story mode against a real provider (they need your key); both are tested with scripted stand-ins.
@@ -199,6 +268,7 @@ This README links every file, so you can start here for anything.
 | File | What it is |
 |---|---|
 | [installer/stage.py](installer/stage.py) | gathers everything the installer needs |
+| [installer/check_installer.py](installer/check_installer.py) | refuses a staged folder or an installer that is smaller than a full one |
 | [installer/blaze.iss](installer/blaze.iss) | the Inno Setup script |
 | [installer/runtime-requirements.txt](installer/runtime-requirements.txt) | the packages inside the installed app |
 | [installer/smoke_installed.py](installer/smoke_installed.py) | runs the installed app end to end |
@@ -210,7 +280,7 @@ This README links every file, so you can start here for anything.
 | File | What it is |
 |---|---|
 | [tests/test_blaze.py](tests/test_blaze.py), [tests/test_language.py](tests/test_language.py), [tests/test_voices.py](tests/test_voices.py), [tests/test_voice_engines.py](tests/test_voice_engines.py) | the language, the compiler, the pipeline, real renders, the voices |
-| [tests/test_ui.py](tests/test_ui.py), [tests/test_ai_animation.py](tests/test_ai_animation.py), [tests/test_blender.py](tests/test_blender.py), [tests/test_launcher.py](tests/test_launcher.py) | the page's server, the AI writer, Blender, the launcher |
+| [tests/test_ui.py](tests/test_ui.py), [tests/test_ui_library_and_modes.py](tests/test_ui_library_and_modes.py), [tests/test_ai_animation.py](tests/test_ai_animation.py), [tests/test_blender.py](tests/test_blender.py), [tests/test_launcher.py](tests/test_launcher.py) | the page's server and its library panel, the AI writer, Blender, the launcher |
 | [tests/test_installer_and_workflows.py](tests/test_installer_and_workflows.py), [tests/test_workflows.py](tests/test_workflows.py), [tests/test_ci_report.py](tests/test_ci_report.py), [tests/test_architecture.py](tests/test_architecture.py), [tests/test_license.py](tests/test_license.py) | the installer, the workflow files, the CI report, the module boundaries, the licence |
 | [tests/](tests/), [studio/tests/](studio/tests/), [cdrca/tests/](cdrca/tests/) | all test folders (what each file covers: [docs/TESTING.md](docs/TESTING.md)) |
 | [tools/check_docs.py](tools/check_docs.py) | links work, screenplays in the docs parse, this README links every file |

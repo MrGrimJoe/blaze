@@ -143,7 +143,20 @@ class TestRendererErrors:
 
 _BUNDLED = Path(__file__).resolve().parents[2] / "cdrca" / "Back-end" / "Render" / "render.js"
 REAL = os.environ.get("BLAZENG_CDRCA_RENDER") or (str(_BUNDLED) if _BUNDLED.exists() else None)
-real_ok = bool(REAL) and Path(REAL).exists() and shutil.which("node") and shutil.which("ffmpeg")
+
+
+def _playwright_installed() -> bool:
+    """The real render needs the playwright package next to render.js (CI installs it on Linux only; the Windows leg has no browser)."""
+    if not (REAL and Path(REAL).exists() and shutil.which("node")):
+        return False
+    try:
+        return subprocess.run(["node", "-e", "require('playwright')"], cwd=str(Path(REAL).resolve().parents[2]),
+                              capture_output=True, timeout=60).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+real_ok = bool(REAL) and Path(REAL).exists() and shutil.which("node") and shutil.which("ffmpeg") and _playwright_installed()
 
 
 @pytest.mark.skipif(not real_ok, reason="needs node + playwright/Chromium + ffmpeg (run: python blaze.py doctor)")

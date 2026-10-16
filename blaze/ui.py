@@ -23,6 +23,9 @@ from pathlib import Path
 from typing import Dict, Optional
 
 from .pipeline import REPO, BlazeError, Options, make
+from . import art as art_mod
+from . import blender as blender_mod
+from .library import IMAGE_EXT, Library, slug
 from . import voice as voice_mod
 from .screenplay import ScreenplayError, cast_label, parse
 from .voice import estimate_seconds
@@ -49,6 +52,7 @@ class Job:
         self.seconds = 0.0
         self.notes: list = []
         self.voice = ""                     # which voice engine was used ("silent" when none was found)
+        self.timeline: dict = {}            # what the Running mode draws: scenes and spoken lines, in seconds of the finished video
 
     def progress(self, line: str) -> None:
         line = line.strip()
@@ -72,7 +76,8 @@ class Job:
         if self.state == "error":
             d["error"] = self.error
         if self.state == "done":
-            d.update(video=f"/media/{self.id}/video.mp4", srt=f"/media/{self.id}/subtitles.srt" if self.srt else "", seconds=round(self.seconds, 1))
+            d.update(video=f"/media/{self.id}/video.mp4", srt=f"/media/{self.id}/subtitles.srt" if self.srt else "", seconds=round(self.seconds, 1),
+                     timeline=self.timeline)
         return d
 
 
@@ -111,6 +116,23 @@ class App:
         except ScreenplayError as e:
             m = re.match(r"line (\d+): (.*)", str(e))
             return {"ok": False, "error": m.group(2) if m else str(e), "line": int(m.group(1)) if m else 0}
+        bad = art_mod.cast_problem(sp.cast)
+        if bad:                                      # a CAST line that make could not draw: say so now, on its own line
+            name, msg = bad
+            msg = msg[len(name) + 2:] if msg.startswith(name + ": ") else msg
+            at = next((i for i, l in enumerate(text.splitlines(), 1)
+                       if (m := re.match(r"\s*CAST\s*:\s*(\"[^\"]*\"|\S+)", l, re.I)) and m.group(1).strip('"').casefold() == name.casefold()), 0)
+            return {"ok": False, "error": f"CAST {name}: {msg}", "line": at}
+        lib = self.lib()
+        for name, desc in sp.cast.items():
+            try:
+                want = art_mod.parse_pairs(desc).get("asset")
+            except ValueError:
+                want = None
+            if want and not lib.character(want):
+                at = next((i for i, l in enumerate(text.splitlines(), 1)
+                           if (m := re.match(r"\s*CAST\s*:\s*(\"[^\"]*\"|\S+)", l, re.I)) and m.group(1).strip('"').casefold() == name.casefold()), 0)
+                return {"ok": False, "line": at, "error": f"CAST {name}: there is no character '{want}' in the library. Add it in the Characters panel (or: blaze asset add <file> --name {want})."}
         scenes, seconds = [], 0.0
         for sc in sp.scenes:
             lines = sum(1 for b in sc.beats if b.kind in ("say", "narr"))
@@ -131,6 +153,133 @@ class App:
                       "pitch": sp.speech.get(c, {}).get("pitch", -1)} for c in people}
         return {"ok": True, "title": sp.title, "cast": sp.characters(), "scenes": scenes, "warnings": warnings,
                 "seconds": round(seconds + 3.2), "voices": voices, "looks": sorted(sp.looks)}
+
+    # ------------------------------------------------------------------ library (your own characters and backdrops)
+    UPLOAD_LIMIT = {".blend": 300_000_000}       # bytes; images are limited to IMAGE_LIMIT
+    IMAGE_LIMIT = 25_000_000
+
+    def lib(self) -> Library:
+        return Library.default(self.library)
+
+    def library_info(self) -> dict:
+        """What the page shows: every character and backdrop in the library, whether a character has a speaking mouth, and
+        whether Blender is installed (a .blend file needs it)."""
+        lib = self.lib()
+        out = {"home": str(lib.home), "characters": [], "backdrops": [], "blender": ""}
+        for name in lib.list()["characters"]:
+            p = lib.character(name)
+            out["characters"].append({"name": name, "url": f"/api/library/img/characters/{name}.png",
+                                      "talk": bool(lib._find("characters", name + "_talk", (".png",))),
+                                      "blink": bool(lib._find("characters", name + "_blink", (".png",))),
+                                      "transparent": bool(p and lib.has_alpha(p))})
+        for name in lib.list()["backdrops"]:
+            out["backdrops"].append({"name": name, "url": f"/api/library/img/backdrops/{name}.png"})
+        b = blender_mod.find_blender()
+        if b:
+            try:
+                out["blender"] = blender_mod.version(str(b))
+            except Exception:
+                out["blender"] = "installed"
+        return out
+
+    def library_file(self, kind: str, name: str) -> Optional[Path]:
+        lib = self.lib()
+        if kind == "characters":
+            return lib._find("characters", name)
+        if kind == "backdrops":
+            return lib._find("backdrops", name)
+        return None
+
+    def library_add(self, kind: str, name: str, filename: str, data: bytes, variant: str = "") -> dict:
+        """Add a character or backdrop from an uploaded file: a PNG/JPG/WebP, or a .blend that Blender renders to sprites.
+        `variant` ("talk" or "blink") adds the open-mouth / closed-eye picture of a character that already exists."""
+        from PIL import Image
+        import io
+        if kind not in ("character", "backdrop"):
+            return {"error": "kind must be 'character' or 'backdrop'"}
+        ext = Path(filename or "").suffix.lower()
+        if ext not in IMAGE_EXT + (".blend",):
+            return {"error": f"'{filename}' is not a PNG, JPG, WebP or .blend file."}
+        limit = self.UPLOAD_LIMIT.get(ext, self.IMAGE_LIMIT)
+        if not data:
+            return {"error": "The file was empty."}
+        if len(data) > limit:
+            return {"error": f"That file is {len(data) // 1_000_000} MB; the limit for {ext} is {limit // 1_000_000} MB."}
+        name = slug(name or Path(filename).stem)
+        lib = self.lib()
+        tmp = self.workdir / "uploads" / uuid.uuid4().hex[:8]
+        tmp.mkdir(parents=True, exist_ok=True)
+        src = tmp / (name + ext)
+        try:
+            src.write_bytes(data)
+            if ext == ".blend":
+                if variant:
+                    return {"error": "A .blend file makes the talking and blinking pictures by itself (give it shape keys named talk and blink)."}
+                if not blender_mod.find_blender():
+                    return {"error": "Blender was not found, and a .blend file needs it. Install it from https://blender.org, "
+                                     "or set BLAZE_BLENDER to its path, or add a PNG instead."}
+                try:
+                    if kind == "character":
+                        files = lib.add_character(src, name)
+                    else:
+                        files = [lib.add_backdrop(src, name)]
+                except blender_mod.BlenderError as e:
+                    return {"error": f"Blender could not render that file: {e}"}
+            else:
+                try:
+                    Image.open(io.BytesIO(data)).verify()
+                except Exception:
+                    return {"error": f"'{filename}' is not a picture Blaze can read."}
+                if kind == "backdrop":
+                    files = [lib.add_backdrop(src, name)]
+                elif variant:
+                    if variant not in ("talk", "blink"):
+                        return {"error": "variant must be 'talk' or 'blink'"}
+                    if not lib.character(name):
+                        return {"error": f"Add the character '{name}' first; its {variant} picture goes next to it."}
+                    out = lib.home / "characters" / f"{name}_{variant}.png"
+                    out.parent.mkdir(parents=True, exist_ok=True)
+                    Image.open(src).convert("RGBA").save(out)
+                    files = [out]
+                else:
+                    files = lib.add_character(src, name)
+        except (OSError, ValueError) as e:
+            return {"error": str(e)}
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        r = {"ok": True, "name": name, "files": [f.name for f in files]}
+        if kind == "character" and not variant and ext != ".blend" and files and not lib.has_alpha(files[0]):
+            r["warning"] = "This picture has no transparent background, so the character will show as a box. Use a PNG with a transparent background."
+        return r
+
+    def library_remove(self, kind: str, name: str) -> dict:
+        key = slug(name)
+        removed = []
+        for root in self.lib().roots:
+            folder = root / ("characters" if kind == "character" else "backdrops")
+            for suffix in (("", "_talk", "_blink") if kind == "character" else ("",)):
+                for ext in IMAGE_EXT:
+                    f = folder / f"{key}{suffix}{ext}"
+                    if f.is_file():
+                        f.unlink(); removed.append(f.name)
+        return {"ok": True, "removed": removed} if removed else {"error": f"There is no {kind} called '{name}' in the library."}
+
+    @staticmethod
+    def _timeline(project: Path) -> dict:
+        """Scenes and spoken lines placed on the finished video's own clock (the same offsets the subtitle file uses)."""
+        try:
+            m = json.loads((project / "project.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+        fps, t, scenes, lines = m.get("fps", 24), 0.0, [], []
+        for shot in m.get("shots", []):
+            dur = max(1, round(shot["duration"] * fps)) / fps
+            scenes.append({"name": shot["name"], "start": round(t, 3), "end": round(t + dur, 3), "title": bool(shot.get("title")),
+                           "mood": shot.get("mood", "")})
+            for a, b, who, text in shot.get("subs", []):
+                lines.append({"start": round(t + a, 3), "end": round(t + b, 3), "who": who or "", "text": text})
+            t += dur
+        return {"title": m.get("title", ""), "seconds": round(t, 3), "scenes": scenes, "lines": lines}
 
     # ------------------------------------------------------------------ voices
     def voices(self) -> dict:
@@ -178,6 +327,7 @@ class App:
             job.message = "Reading the screenplay"
             res = make(text, job.work / "video.mp4", opts, job.work / "project", self.library.parent if self.library else None)
             job.video, job.srt, job.seconds = res.video, res.srt, res.duration
+            job.timeline = self._timeline(res.project)
             if res.srt:
                 shutil.copyfile(res.srt, job.work / "subtitles.srt"); job.srt = job.work / "subtitles.srt"
             job.state, job.message = "done", "Done"
@@ -283,12 +433,18 @@ def make_handler(app: App):
                 app.ping()
                 return self._json({"ok": True})
             if path == "/api/status":
-                return self._json({"ai": app.ai_available(), "provider": app.ai_provider(), "sample": SAMPLE.read_text(encoding="utf-8") if SAMPLE.exists() else ""})
+                return self._json({"ai": app.ai_available(), "provider": app.ai_provider(), "blender": bool(blender_mod.find_blender()), "sample": SAMPLE.read_text(encoding="utf-8") if SAMPLE.exists() else ""})
             if path == "/api/voices":
                 return self._json(app.voices())
             m = re.fullmatch(r"/preview/([0-9a-f]{16})\.wav", path)
             if m:
                 return self._file(app.workdir / "previews" / f"{m.group(1)}.wav", "audio/wav")
+            if path == "/api/library":
+                return self._json(app.library_info())
+            m = re.fullmatch(r"/api/library/img/(characters|backdrops)/([A-Za-z0-9_]+)\.png", path)
+            if m:
+                f = app.library_file(m.group(1), m.group(2))
+                return self._file(f, "image/png") if f else self.send_error(404)
             m = re.fullmatch(r"/api/job/(\w+)", path)
             if m:
                 job = app.jobs.get(m.group(1))
@@ -303,7 +459,18 @@ def make_handler(app: App):
         def do_POST(self):
             if not self._local_only():
                 return self._json({"error": "local only"}, 403)
+            if self.path.startswith("/api/library/add"):          # the file itself is the request body (not JSON), the rest is in the URL
+                from urllib.parse import parse_qs, urlparse
+                q = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
+                n = int(self.headers.get("Content-Length") or 0)
+                if n > max(app.UPLOAD_LIMIT.values()) + 1024:
+                    return self._json({"error": "That file is too large."}, 413)
+                r = app.library_add(q.get("kind", ""), q.get("name", ""), q.get("filename", ""), self.rfile.read(n), q.get("variant", ""))
+                return self._json(r, 400 if "error" in r else 200)
             data = self._body()
+            if self.path == "/api/library/remove":
+                r = app.library_remove(str(data.get("kind", "")), str(data.get("name", "")))
+                return self._json(r, 404 if "error" in r else 200)
             if self.path == "/api/bye":
                 app.ping(bye=True)
                 return self._json({"ok": True})

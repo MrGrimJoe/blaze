@@ -54,6 +54,22 @@ become empty scenes). They are kept as `git am` patches in [`cdrca-patches/`](..
 screenplay as you type with the same parser, runs the same `make` as the command line in a background thread (one video at a
 time), and serves the result. It also stores your provider choice in `studio/config.yaml` for the AI writer.
 
+The page (`blaze/ui_assets/index.html`, plain HTML and JavaScript, no framework) has three modes that share one screenplay:
+**Editor** (the code, line numbers, the error line marked), **Smart** (the outline, voices and library panels beside the code) and
+**Running** (the finished video and a timeline). Switching modes only changes which parts are shown; `#editor`, `#smart` and
+`#running` in the URL open one. There is no build step, so a bug is found by opening the file.
+
+Two things beyond checking and making:
+
+- **The library.** `GET /api/library` lists your characters and backdrops (and whether Blender is installed); `POST
+  /api/library/add?kind=&name=&filename=[&variant=]` takes the file itself as the request body (a PNG/JPG/WebP is checked and
+  converted, a `.blend` is rendered by Blender into `name.png`, `name_talk.png`, `name_blink.png`); `POST /api/library/remove`;
+  `GET /api/library/img/<characters|backdrops>/<name>.png` serves a picture. Files go to the first library folder (`--library`, or
+  `./library`; the installed app uses `Documents\Blaze\library`), the same folders `blaze make` reads, so the page and the command
+  line see the same characters. `/api/check` reports a `CAST` whose `asset=` is not in the library, on that line.
+- **The timeline.** When a video finishes, `/api/job/<id>` carries `timeline`: the scenes and every spoken line on the finished
+  video's own clock, computed from `project.json` with the same offsets the subtitle file uses. Running mode draws only from that.
+
 ## Tests
 
 | Where | What |

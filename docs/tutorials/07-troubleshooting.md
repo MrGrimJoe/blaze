@@ -30,6 +30,12 @@ On Windows, if `python` is not found, try `py blaze.py ...`. Put paths with spac
 | `Port 8765 is already in use` | Blaze is already open in another window, or another program uses the port. Use `python blaze.py ui --port 8766`. |
 | The page says *Blaze could not be reached* or *Lost contact with Blaze* | The terminal where you ran `python blaze.py ui` was closed or stopped. Start it again. Your screenplay is remembered in the browser. |
 | *A video is already being made. Wait for it to finish.* | The page makes one video at a time. |
+| *CAST X: there is no character 'robo' in the library* | The screenplay says `asset=robo` but nothing by that name was added. Add it in the **Characters** panel (Smart mode), or `python blaze.py asset add robo.png --name robo`. |
+| *Blender was not found, and a .blend file needs it* | Install Blender from blender.org, or set `BLAZE_BLENDER` to its path, or add a PNG instead. `python blaze.py doctor` shows whether Blender was found. |
+| *Blender could not render that file* | The message after it is Blender's own. The usual causes: no mesh in the file, or a file saved by a newer Blender than the one installed. |
+| An added character shows as a box | The picture has no transparent background. Re-export it as a PNG with transparency. |
+| **Running** shows a black picture | Your browser cannot play the video (the headless Chromium used for screenshots cannot decode H.264; Chrome, Edge and Firefox can). The timeline still works, and **Download video** gives you the file. |
+| **Running** says nothing has been made | Make a video first. The page only remembers the last video while Blaze is still running; restarting Blaze clears it (the video file stays in `blaze-videos`). |
 | *Make video* is greyed out | The screenplay is empty or has an error. Read the red line at the bottom; **Go to line** jumps to it. |
 | It never finishes | Quality is too high for your computer. See "Slow" below. The terminal shows what is happening. |
 

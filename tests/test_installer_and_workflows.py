@@ -182,9 +182,26 @@ class TestWorkflows:
 
     def test_the_installer_is_built_verified_photographed_and_released(self):
         jobs = WORKFLOWS["build-blaze-installer.yml"]["jobs"]
-        assert set(jobs) == {"build", "verify", "installer-screens", "release"}
-        assert jobs["verify"]["needs"] == "build" and jobs["release"]["needs"] == ["build", "verify"]
+        assert set(jobs) == {"build", "verify", "installer-screens", "publish"}
+        assert jobs["verify"]["needs"] == "build" and jobs["publish"]["needs"] == ["build", "verify"]
         assert jobs["installer-screens"].get("continue-on-error") is True           # best effort: it needs a desktop session
+
+    def test_only_a_verified_installer_is_ever_called_blaze_installer(self):
+        """A failed run used to leave a downloadable `blaze-installer` (even a hollow one). Now the build uploads
+        `blaze-installer-unverified`, and the only upload with the real name sits in the job that needs `verify`."""
+        jobs = WORKFLOWS["build-blaze-installer.yml"]["jobs"]
+        def uploads(job):
+            return [st["with"]["name"] for st in jobs[job]["steps"] if str(st.get("uses", "")).startswith("actions/upload-artifact")
+                    and "name" in st.get("with", {})]
+        assert "blaze-installer-unverified" in uploads("build") and "blaze-installer" not in uploads("build")
+        for job in ("verify", "installer-screens"):
+            assert "blaze-installer" not in uploads(job), job
+        assert "blaze-installer" in uploads("publish")
+        assert "verify" in jobs["publish"]["needs"]
+
+    def test_the_build_refuses_a_hollow_installer(self):
+        steps = " ".join(str(st.get("run", "")) for st in WORKFLOWS["build-blaze-installer.yml"]["jobs"]["build"]["steps"])
+        assert "check_installer.py --stage" in steps and "check_installer.py --installer" in steps
 
     def test_ci_runs_on_all_three_systems_and_demands_voices_and_blender(self):
         ci = WORKFLOWS["ci.yml"]["jobs"]

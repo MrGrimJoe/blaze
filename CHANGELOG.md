@@ -2,6 +2,18 @@
 
 ## Unreleased (language, looks and voices)
 
+**Three modes, and your own characters in the page**
+- The page has three tabs: **Editor** (just the code, with line numbers and the error line marked), **Smart** (the page as it was) and
+  **Running** (the finished video on a timeline: scenes, one row per speaker, a draggable playhead, a clickable list of lines, speed, zoom,
+  arrow keys and Space). The last video is restored after a reload; the URL hash (`#editor`, `#smart`, `#running`) opens a mode.
+- Characters and backdrops can be added, listed, given a talking mouth and removed from the page, from a PNG/JPG/WebP or from a `.blend`
+  through Blender. New endpoints: `/api/library`, `/api/library/add`, `/api/library/remove`, `/api/library/img/...`.
+- A `CAST: X asset=name` that is not in the library is reported while you type, on its own line.
+- A finished job carries a `timeline` (scenes and lines on the video's clock) for the Running mode.
+- Tests: `tests/test_ui_library_and_modes.py`; three new page screens (16 library, 17 editor, 18 running).
+- Not verified here: a real `.blend` through Blender (none installed in the sandbox; the server tests use a stand-in for Blender), and the
+  mp4 playing in the Running player (headless Chromium cannot decode H.264; seeking and the timeline were checked against a playable copy).
+
 **Language**
 - A screenplay is now two layers: an explicit core (`SPEAK`, `NARRATE`, `ENTER`, `EXIT`, `MOVE`, `HOP`, `PAUSE`, `DEFINE LOOK`) and the
   existing shorthand, which expands to it. `blaze expand story.txt` prints the core form; it parses back to the same screenplay.

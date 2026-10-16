@@ -58,7 +58,8 @@ class TestComposeShot:
         # Not the raw path -- the composer escapes backslashes/quotes for GDScript
         # string-literal syntax (necessary on Windows; a no-op on POSIX paths,
         # which is why checking the raw path only happened to pass there).
-        escaped_path = str(dummy_asset).replace("\\", "\\\\").replace('"', '\\"')
+        gd_path = str(dummy_asset).replace("\\", "\\\\").replace('"', '\\"')           # as a GDScript string literal
+        escaped_path = gd_path.replace("\\", "\\\\").replace('"', '\\"')               # and again: the script sits inside a .tscn string
         assert escaped_path in content
         assert "Image.new()" in content
         assert "ImageTexture.create_from_image" in content

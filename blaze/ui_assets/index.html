@@ -113,6 +113,81 @@
     .idea select { flex: 1 1 100%; max-width: none; }
     textarea { font-size: 14px; }
   }
+
+  /* ---- the three modes: Editor (just the code), Smart (the page as it was), Running (watch and scrub the finished video) */
+  .modes { display: inline-flex; gap: 2px; background: var(--line); border-radius: 10px; padding: 3px; }
+  .modes button { border: 0; background: transparent; color: var(--mute); padding: 5px 14px; border-radius: 8px; cursor: pointer; font-weight: 550; position: relative; }
+  .modes button:hover { color: var(--ink); }
+  .modes button[aria-selected="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+  .modes button[data-new="1"]::after { content: ""; position: absolute; top: 4px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .ed { display: flex; flex: 1; min-height: 0; min-width: 0; }
+  .ed textarea { min-width: 0; }
+  body[data-mode="editor"] .ed textarea { flex: 1 1 0; width: auto; }
+  #gutter { display: none; margin: 0; padding: 6px 12px 6px 0; text-align: right; color: var(--mute); font: 15px/1.75 var(--mono); user-select: none; overflow: hidden; min-width: 3.2em; border-right: 1px solid var(--line); }
+  #gutter .bad { color: var(--bad); font-weight: 700; }
+  #gutter .cur { color: var(--ink); }
+  body[data-mode="editor"] #gutter { display: block; }
+  body[data-mode="editor"] textarea { white-space: pre; overflow: auto; padding-left: 14px; }
+  body[data-mode="editor"] main { grid-template-columns: minmax(0, 1fr); }
+  body[data-mode="editor"] .write { max-width: none; justify-self: stretch; }
+  body[data-mode="editor"] aside, body[data-mode="editor"] .idea { display: none; }
+  body[data-mode="running"] main { display: none; }
+  body:not([data-mode="running"]) #running { display: none; }
+
+  #running { padding: 8px clamp(16px, 3vw, 36px) 20px; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; }
+  #runBody { display: contents; }
+  #runBody[hidden] { display: none; }
+  .runEmpty { margin: auto; text-align: center; color: var(--mute); max-width: 420px; }
+  .runEmpty p { margin: 0 0 14px; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; min-height: 0; }
+  .screen { background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center; align-items: center; aspect-ratio: 16 / 9; max-height: 52vh; width: 100%; justify-self: center; }
+  .screen video { width: 100%; height: 100%; border-radius: 0; object-fit: contain; }
+  .lines { min-width: 0; overflow: auto; max-height: 52vh; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+  .lines h2 { font-size: 13px; font-weight: 600; color: var(--mute); margin: 0; padding: 10px 14px 6px; position: sticky; top: 0; background: var(--panel); }
+  .lines ol { list-style: none; margin: 0; padding: 0 6px 8px; }
+  .lines li { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .lines li:hover { background: var(--bg); }
+  .lines li.now { background: var(--accent); color: var(--accent-ink); }
+  .lines li.now .t, .lines li.now .w { color: inherit; opacity: .85; }
+  .lines .t { color: var(--mute); font: 12px/1.9 var(--mono); }
+  .lines .w { display: block; color: var(--mute); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
+  .transport { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .transport button.round { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--ink); color: var(--bg); cursor: pointer; font-size: 15px; }
+  .transport .time { font: 14px var(--mono); color: var(--ink); min-width: 9.5em; }
+  .transport .grow { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+  .transport a { color: var(--ink); text-underline-offset: 3px; }
+  .transport label { display: flex; align-items: center; gap: 6px; color: var(--mute); font-size: 13px; }
+  .transport select { border-bottom: 1px solid var(--line); border-radius: 0; }
+  .transport input[type=range] { width: 90px; }
+  .tl { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); user-select: none; }
+  .tlInner { position: relative; padding-bottom: 6px; }
+  .tlrow { position: relative; height: 34px; margin-top: 4px; }
+  .tlrow .lab { position: sticky; left: 0; z-index: 3; width: 92px; height: 100%; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--mute); background: var(--panel); border-right: 1px solid var(--line); text-transform: uppercase; letter-spacing: .03em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .tlrow .blk { position: absolute; top: 3px; height: 28px; border-radius: 6px; padding: 0 8px; font-size: 12px; line-height: 28px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; color: var(--accent-ink); background: var(--accent); }
+  .tlrow .blk.scene { background: var(--ink); color: var(--bg); }
+  .tlrow .blk.scene.title { background: var(--mute); }
+  .tlrow .blk:hover { filter: brightness(1.12); }
+  .tlrow .blk.now { outline: 2px solid var(--ok); outline-offset: 1px; }
+  .ruler { position: relative; height: 24px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .ruler .tick { position: absolute; top: 12px; bottom: 0; border-left: 1px solid var(--line); }
+  .ruler .tick span { position: absolute; top: -13px; left: 4px; font: 11px var(--mono); color: var(--mute); white-space: nowrap; }
+  .playhead { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid var(--bad); z-index: 4; pointer-events: none; }
+  .playhead::before { content: ""; position: absolute; top: 0; left: -7px; border: 6px solid transparent; border-top: 9px solid var(--bad); }
+
+  .lib h2 { display: flex; align-items: center; gap: 8px; }
+  .lib h2 .quiet { margin-left: auto; font-weight: 500; }
+  .lib ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .lib li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+  .lib li img { width: 34px; height: 44px; object-fit: contain; background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 10px 10px; border-radius: 4px; }
+  .lib li.bd img { width: 56px; height: 32px; object-fit: cover; }
+  .lib li.bd { grid-template-columns: 56px minmax(0, 1fr) auto; }
+  .lib .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lib .nm small { display: block; color: var(--mute); font-size: 12px; }
+  .lib .acts { display: flex; gap: 8px; font-size: 13px; }
+  .lib .hint { color: var(--mute); font-size: 13px; margin: 6px 0 0; }
+  .lib .warn { color: var(--warn); }
+  @media (max-width: 860px) { .stage { grid-template-columns: minmax(0, 1fr); } .lines { max-height: 30vh; } .modes button { padding: 5px 10px; } }
+  @media (max-width: 640px) { .modes { grid-column: 1 / -1; grid-row: 3; justify-self: start; } header { grid-template-areas: "m b" "q v" "t t" !important; } .modes { grid-area: t; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -120,6 +195,11 @@
 <div class="app">
   <header>
     <span class="mark">Blaze</span>
+    <nav class="modes" role="tablist" aria-label="Mode">
+      <button role="tab" id="tab-editor" data-mode="editor" aria-selected="false" title="Just the code: line numbers, errors on the line, nothing else">Editor</button>
+      <button role="tab" id="tab-smart" data-mode="smart" aria-selected="true" title="Write and see it understood as you type: cast, scenes, voices, your characters">Smart</button>
+      <button role="tab" id="tab-running" data-mode="running" aria-selected="false" title="Watch the finished video on a timeline: scrub, jump to any line">Running</button>
+    </nav>
     <label>Quality
       <select id="quality" aria-label="Video quality">
         <option value="fast">Draft · 640×360</option>
@@ -154,6 +234,7 @@
         <input id="provKey" type="password" placeholder="Paste your API key" aria-label="API key" autocomplete="off">
         <button class="quiet" id="provSave">Save</button>
       </div>
+      <div class="ed"><pre id="gutter" aria-hidden="true"></pre>
       <textarea id="text" spellcheck="false" aria-label="Screenplay" placeholder="TITLE: The Lost Key
 CAST: JOHN gender=m coat=1
 CAST: MARY gender=f dress=1
@@ -162,7 +243,7 @@ SCENE: street
 BACKDROP: gen:street:night
 JOHN: Did you hear that?
 MARY: It is just the wind.
-[MOVE JOHN 3]"></textarea>
+[MOVE JOHN 3]"></textarea></div>
       <div class="status" id="status" role="status" aria-live="polite"></div>
     </section>
 
@@ -170,6 +251,8 @@ MARY: It is just the wind.
       <div id="result"></div>
       <div id="outline"></div>
       <div id="voicebox"></div>
+      <div id="library" class="lib"></div>
+      <input type="file" id="libFile" hidden accept=".png,.jpg,.jpeg,.webp,.blend">
       <details>
         <summary>Screenplay format</summary>
 <pre>TITLE: and SUBTITLE: name the video
@@ -194,6 +277,27 @@ dim rain storm snow night_rain night_snow.</pre>
       </details>
     </aside>
   </main>
+
+  <section id="running" aria-label="The finished video">
+    <div class="runEmpty" id="runEmpty"><p>Nothing has been made yet. Write a screenplay, then make the video: it appears here with its timeline.</p>
+      <button class="primary" id="runMake">Make video</button></div>
+    <div id="runBody" hidden>
+      <div class="stage">
+        <div class="screen"><video id="rv" playsinline preload="metadata"></video></div>
+        <div class="lines"><h2>Lines</h2><ol id="lineList"></ol></div>
+      </div>
+      <div class="transport">
+        <button class="round" id="rPlay" aria-label="Play">&#9654;</button>
+        <span class="time" id="rTime">0:00.0 / 0:00.0</span>
+        <div class="grow">
+          <label>Speed <select id="rSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label>
+          <label>Zoom <input type="range" id="rZoom" min="0" max="100" value="0" aria-label="Timeline zoom"></label>
+          <a id="rDl" download>Download</a><a id="rSrt" download>Subtitles</a>
+        </div>
+      </div>
+      <div class="tl" id="tl"><div class="tlInner" id="tlInner"></div></div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -201,6 +305,7 @@ const $ = (id) => document.getElementById(id);
 const text = $("text"), status = $("status"), makeBtn = $("make");
 let sample = "", lastCheck = null, timer = null, job = null;
 
+let mode = "smart";
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -309,7 +414,7 @@ function check() {
     store.set("blaze.text", text.value);
     if (!text.value.trim()) { lastCheck = null; renderStatus(null); renderOutline(null); renderVoices(null); makeBtn.disabled = true; return; }
     try { lastCheck = await post("/api/check", { text: text.value }); } catch (e) { return; }
-    renderStatus(lastCheck); renderOutline(lastCheck); renderVoices(lastCheck);
+    renderStatus(lastCheck); renderOutline(lastCheck); renderVoices(lastCheck); drawGutter();
     makeBtn.disabled = !lastCheck.ok || (job && job.state === "running");
   }, 250);
 }
@@ -344,6 +449,7 @@ async function poll() {
   }
   makeBtn.textContent = "Make video"; makeBtn.disabled = !(lastCheck && lastCheck.ok); setBar(null);
   if (r.state === "error") return fail(r.error);
+  store.set("blaze.lastJob", r.id); setRunning(r);
   const quiet = $("voice").checked && /silent/i.test(r.voice || "") ? ["No voice engine was found, so this video has no sound. See Tutorial 4 to add one."] : [];
   const all = (r.notes || []).concat(quiet);
   const notes = all.length ? `<ul class="notes">${all.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : "";
@@ -384,6 +490,164 @@ for (const id of ["quality", "voice"]) {
   el.addEventListener("change", () => store.set("blaze." + id, el.type === "checkbox" ? (el.checked ? "1" : "0") : el.value));
 }
 
+// ---- Editor mode: line numbers beside the code, the line with the error marked, Tab indents
+const gutter = $("gutter");
+function drawGutter() {
+  if (mode !== "editor") return;
+  const n = text.value.split("\n").length, bad = lastCheck && !lastCheck.ok ? lastCheck.line : 0;
+  const cur = text.value.slice(0, text.selectionStart).split("\n").length;
+  let h = "";
+  for (let i = 1; i <= n; i++) h += `<div class="${i === bad ? "bad" : i === cur ? "cur" : ""}">${i}</div>`;
+  gutter.innerHTML = h; gutter.scrollTop = text.scrollTop;
+}
+text.addEventListener("scroll", () => { gutter.scrollTop = text.scrollTop; });
+text.addEventListener("input", drawGutter);
+for (const ev of ["keyup", "click", "focus"]) text.addEventListener(ev, drawGutter);
+text.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab" || mode !== "editor" || e.ctrlKey || e.metaKey || e.altKey) return;
+  e.preventDefault(); text.setRangeText("  ", text.selectionStart, text.selectionEnd, "end"); text.dispatchEvent(new Event("input"));
+});
+
+// ---- the library: your own characters and backdrops (a PNG, or a .blend that Blender renders for you)
+let lib = { characters: [], backdrops: [], blender: "" }, libPick = null, libMsg = "";
+const castName = (n) => n.toUpperCase();
+async function loadLibrary() {
+  try { lib = await (await fetch("/api/library")).json(); } catch (e) { return; }
+  renderLibrary();
+}
+function renderLibrary() {
+  const el = $("library");
+  const chars = lib.characters.map((c) => `<li data-name="${esc(c.name)}"><img src="${c.url}?v=${Date.now()}" alt="">
+      <span class="nm">${esc(castName(c.name))}<small>${c.talk ? "talking mouth" : "no talking picture"}${c.blink ? " · blinks" : ""}${c.transparent ? "" : " · no transparency"}</small></span>
+      <span class="acts"><button class="quiet use">Use</button><button class="quiet mouth" title="Add the open-mouth picture">+ mouth</button><button class="quiet rm" aria-label="Remove ${esc(c.name)}">Remove</button></span></li>`).join("");
+  const bds = lib.backdrops.map((b) => `<li class="bd" data-name="${esc(b.name)}"><img src="${b.url}?v=${Date.now()}" alt="">
+      <span class="nm">${esc(b.name)}</span><span class="acts"><button class="quiet use">Use</button><button class="quiet rm" aria-label="Remove ${esc(b.name)}">Remove</button></span></li>`).join("");
+  const blend = lib.blender ? `Blender ${esc(lib.blender)} is ready for .blend files.` : `Blender was not found: a .blend file needs it (blender.org). PNGs work without it.`;
+  el.innerHTML = `<h2>Characters <button class="quiet" id="addChar">Add character</button></h2>
+    ${chars ? `<ul>${chars}</ul>` : `<p class="empty">None yet. Add a PNG with a transparent background, or a .blend model made in Blender.</p>`}
+    <p class="hint">${blend}</p>${libMsg ? `<p class="hint ${/^(Added|Removed)/.test(libMsg) ? "" : "warn"}" role="status">${esc(libMsg)}</p>` : ""}
+    <h2 style="margin-top:22px">Backdrops <button class="quiet" id="addBack">Add backdrop</button></h2>
+    ${bds ? `<ul>${bds}</ul>` : `<p class="empty">None yet. Add an image, or a .blend scene.</p>`}`;
+  $("addChar").onclick = () => pickFile({ kind: "character" });
+  $("addBack").onclick = () => pickFile({ kind: "backdrop" });
+  el.querySelectorAll("li").forEach((li) => {
+    const name = li.dataset.name, isBack = li.classList.contains("bd");
+    li.querySelector(".use").onclick = () => {
+      if (isBack) { insertLine(`BACKDROP: ${name}`); return; }
+      setCastKey(castName(name), "asset", name);
+    };
+    const mouth = li.querySelector(".mouth"); if (mouth) mouth.onclick = () => pickFile({ kind: "character", name, variant: "talk" });
+    li.querySelector(".rm").onclick = async () => {
+      const r = await post("/api/library/remove", { kind: isBack ? "backdrop" : "character", name });
+      libMsg = r.error ? r.error : `Removed ${name}.`; await loadLibrary(); check();
+    };
+  });
+}
+function insertLine(line) {
+  const v = text.value, at = text.selectionStart, eol = v.indexOf("\n", at), pos = eol < 0 ? v.length : eol;
+  text.value = v.slice(0, pos) + (pos && v[pos - 1] !== "\n" ? "\n" : "") + line + v.slice(pos);
+  text.focus(); check();
+}
+function pickFile(opts) { libPick = opts; $("libFile").value = ""; $("libFile").click(); }
+$("libFile").onchange = async () => {
+  const f = $("libFile").files[0]; if (!f || !libPick) return;
+  const o = libPick, ext = (f.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+  libMsg = ext === ".blend" ? "Rendering in Blender… this can take a few minutes." : "Adding…"; renderLibrary();
+  const q = new URLSearchParams({ kind: o.kind, filename: f.name });
+  if (o.name || f.name) q.set("name", o.name || f.name.replace(/\.[^.]+$/, ""));
+  if (o.variant) q.set("variant", o.variant);
+  try {
+    const r = await (await fetch("/api/library/add?" + q, { method: "POST", body: f })).json();
+    libMsg = r.error ? r.error : `Added ${r.name}.${r.warning ? " " + r.warning : ""}`;
+  } catch (e) { libMsg = "Blaze could not be reached."; }
+  await loadLibrary(); check();
+};
+
+// ---- Running mode: the finished video with a timeline (scenes, then one row per speaker)
+const rv = $("rv"), tl = $("tl"), tlInner = $("tlInner"), LABEL = 92;
+let run = null, pps = 40, fitPps = 40;
+const mmss = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, "0")}`;
+function setRunning(j) {
+  run = j && j.state === "done" && j.video ? j : null;
+  $("runEmpty").hidden = !!run; $("runBody").hidden = !run;
+  if (!run) return;
+  rv.src = run.video; $("rDl").href = run.video + "?download=1"; $("rSrt").href = run.srt ? run.srt + "?download=1" : ""; $("rSrt").hidden = !run.srt;
+  const T = run.timeline || {}; run.dur = T.seconds || run.seconds || 0;
+  $("lineList").innerHTML = (T.lines || []).map((l, i) => `<li data-i="${i}"><span class="t">${mmss(l.start).slice(0, -2)}</span><span><span class="w">${esc(l.who || "Narrator")}</span>${esc(l.text)}</span></li>`).join("")
+    || `<li style="cursor:default"><span></span><span class="w">No spoken lines</span></li>`;
+  document.querySelectorAll("#lineList li[data-i]").forEach((li) => { li.onclick = () => seek(T.lines[+li.dataset.i].start); });
+  if (mode !== "running") $("tab-running").dataset.new = "1";
+  requestAnimationFrame(() => { fitZoom(); drawTimeline(); });
+}
+function fitZoom() { fitPps = Math.max(12, (tl.clientWidth - LABEL - 24) / Math.max(1, run.dur)); applyZoom(); }
+function applyZoom() { const z = +$("rZoom").value / 100; pps = fitPps * (1 + z * 7); }
+function drawTimeline() {
+  if (!run) return;
+  const T = run.timeline || { scenes: [], lines: [] }, W = Math.ceil(run.dur * pps) + LABEL + 24;
+  tlInner.style.width = W + "px";
+  const x = (t) => LABEL + t * pps;
+  let step = [0.5, 1, 2, 5, 10, 15, 30, 60].find((s) => s * pps >= 70) || 60;
+  let h = `<div class="ruler" id="ruler">`;
+  for (let t = 0; t <= run.dur + 0.001; t += step) h += `<div class="tick" style="left:${x(t)}px"><span>${mmss(t).replace(/\.0$/, "")}</span></div>`;
+  h += `</div><div class="tlrow"><div class="lab">Scenes</div>` + (T.scenes || []).map((s, i) =>
+    `<div class="blk scene${s.title ? " title" : ""}" data-s="${s.start}" data-e="${s.end}" style="left:${x(s.start)}px;width:${Math.max(4, (s.end - s.start) * pps - 2)}px" title="${esc(s.name)}">${s.title ? "Title" : esc(s.name)}</div>`).join("") + `</div>`;
+  const who = [...new Set((T.lines || []).map((l) => l.who || ""))];
+  for (const w of who) h += `<div class="tlrow"><div class="lab" title="${esc(w || "Narrator")}">${esc(w || "Narrator")}</div>` + (T.lines || []).filter((l) => (l.who || "") === w).map((l) =>
+    `<div class="blk" data-s="${l.start}" data-e="${l.end}" style="left:${x(l.start)}px;width:${Math.max(4, (l.end - l.start) * pps - 2)}px" title="${esc(l.text)}">${esc(l.text)}</div>`).join("") + `</div>`;
+  h += `<div class="playhead" id="ph"></div>`;
+  tlInner.innerHTML = h;
+  tlInner.querySelectorAll(".blk").forEach((b) => { b.onclick = (e) => { e.stopPropagation(); seek(+b.dataset.s); }; });
+  tick();
+}
+function seek(t) { if (!run) return; rv.currentTime = Math.max(0, Math.min(run.dur, t)); tick(); }
+function tick() {
+  if (!run) return;
+  const t = rv.currentTime || 0;
+  $("ph").style.left = (LABEL + t * pps) + "px";
+  $("rTime").textContent = `${mmss(t)} / ${mmss(run.dur)}`;
+  $("rPlay").innerHTML = rv.paused ? "&#9654;" : "&#10074;&#10074;"; $("rPlay").setAttribute("aria-label", rv.paused ? "Play" : "Pause");
+  const L = (run.timeline && run.timeline.lines) || [];
+  document.querySelectorAll("#lineList li[data-i]").forEach((li) => { const l = L[+li.dataset.i]; li.classList.toggle("now", t >= l.start && t < l.end); });
+  tlInner.querySelectorAll(".blk:not(.scene)").forEach((b) => b.classList.toggle("now", t >= +b.dataset.s && t < +b.dataset.e));
+  const x = LABEL + t * pps;
+  if (!rv.paused && (x > tl.scrollLeft + tl.clientWidth - 40 || x < tl.scrollLeft + LABEL)) tl.scrollLeft = Math.max(0, x - LABEL - 40);
+}
+function scrubFrom(e) { const r = tlInner.getBoundingClientRect(); seek((e.clientX - r.left - LABEL) / pps); }
+let scrubbing = false;
+tlInner.addEventListener("pointerdown", (e) => { if (e.target.closest(".blk") || e.target.closest(".lab")) return; scrubbing = true; tlInner.setPointerCapture(e.pointerId); scrubFrom(e); });
+tlInner.addEventListener("pointermove", (e) => { if (scrubbing) scrubFrom(e); });
+tlInner.addEventListener("pointerup", () => { scrubbing = false; });
+rv.addEventListener("timeupdate", tick); rv.addEventListener("play", tick); rv.addEventListener("pause", tick); rv.addEventListener("seeked", tick);
+(function loop() { if (run && !rv.paused) tick(); requestAnimationFrame(loop); })();
+$("rPlay").onclick = () => { if (rv.paused) rv.play(); else rv.pause(); };
+$("rSpeed").onchange = () => { rv.playbackRate = +$("rSpeed").value; };
+$("rZoom").oninput = () => { applyZoom(); drawTimeline(); };
+$("runMake").onclick = () => { makeBtn.click(); };
+addEventListener("resize", () => { if (run && mode === "running") { fitZoom(); drawTimeline(); } });
+document.addEventListener("keydown", (e) => {
+  if (mode !== "running" || !run || /^(INPUT|SELECT|TEXTAREA)$/.test((e.target.tagName || ""))) return;
+  if (e.key === " ") { e.preventDefault(); $("rPlay").click(); }
+  else if (e.key === "ArrowRight") seek(rv.currentTime + (e.shiftKey ? 5 : 1));
+  else if (e.key === "ArrowLeft") seek(rv.currentTime - (e.shiftKey ? 5 : 1));
+});
+
+// ---- switching modes (the screenplay is the same text in Editor and Smart; Running shows the last video made)
+function setMode(m, remember = true) {
+  if (!["editor", "smart", "running"].includes(m)) m = "smart";
+  mode = m; document.body.dataset.mode = m;
+  document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.mode === m)));
+  if (remember) { store.set("blaze.mode", m); try { history.replaceState(null, "", "#" + m); } catch (e) {} }
+  if (m === "running") { $("tab-running").dataset.new = ""; if (run) requestAnimationFrame(() => { fitZoom(); drawTimeline(); }); }
+  if (m === "editor") { drawGutter(); text.focus(); }
+  if (m === "smart") text.focus();
+}
+document.querySelectorAll(".modes button").forEach((b) => { b.onclick = () => setMode(b.dataset.mode); });
+document.querySelector(".modes").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const order = ["editor", "smart", "running"], i = order.indexOf(mode), n = order[(i + (e.key === "ArrowRight" ? 1 : 2)) % 3];
+  setMode(n); $("tab-" + n).focus();
+});
+
 // Tell Blaze the page is open (the installed app closes itself when the page is closed).
 const ping = () => fetch("/api/ping").catch(() => {});
 ping(); setInterval(ping, 4000);
@@ -393,7 +657,13 @@ addEventListener("pagehide", () => { try { navigator.sendBeacon("/api/bye", "{}"
   try { const s = await (await fetch("/api/status")).json(); sample = s.sample || ""; showAi(!!s.ai); } catch (e) {}
   try { engines = (await (await fetch("/api/voices")).json()).engines || []; } catch (e) {}
   text.value = store.get("blaze.text") || "";
-  makeBtn.disabled = true; check(); text.focus();
+  loadLibrary();
+  const last = store.get("blaze.lastJob");
+  if (last) { try { const j = await (await fetch("/api/job/" + last)).json(); if (j.state === "done") setRunning(j); } catch (e) {} }
+  const hash = (location.hash || "").slice(1);
+  setMode(["editor", "smart", "running"].includes(hash) ? hash : (store.get("blaze.mode") || "smart"), false);
+  if (mode === "running") $("tab-running").dataset.new = "";
+  makeBtn.disabled = true; check();
 })();
 </script>
 </body>

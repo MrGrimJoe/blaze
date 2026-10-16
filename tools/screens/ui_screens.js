@@ -113,8 +113,11 @@ async function step(name, title, check, fn) {
   });
   await step("14", "A voice for each character", "Under the outline a Voices list has one row per character: a drop-down (Automatic, Silent, then every installed voice), a Play button and a speed box. Choosing a voice writes it into that character's CAST line in the editor.", async () => {
     await load(p); await useExample(p);
+    // The page asks the server to check the screenplay and then draws the rows. A fixed pause is enough on a quick machine
+    // and not on a slow one (the installed app on Windows lists the system voices first), so wait for the rows instead.
+    await p.waitForSelector("#voicebox li", { timeout: 30000 }).catch(() => {});
     const rows = await p.$$("#voicebox li");
-    expect(rows.length >= 2, "a row for each character in the example, got " + rows.length);
+    expect(rows.length >= 2, "a row for each character in the example, got " + rows.length + " after waiting 30 s; status: " + (await textOf(p, "#status")).slice(0, 100));
     const select = await rows[0].$("select");
     const options = await select.$$eval("option", (o) => o.map((x) => x.value));
     expect(options[0] === "auto" && options[1] === "off", "Automatic and Silent come first");
@@ -139,12 +142,46 @@ async function step(name, title, check, fn) {
   await step("15", "Text looks and per-character speed", "A screenplay with DEFINE LOOK lines and look= on lines checks out: the outline lists the characters with a voice row each, and nothing is flagged.", async () => {
     const demo = fs.readFileSync(path.join(__dirname, "..", "..", "examples", "looks-and-voices.txt"), "utf8");
     await p.fill("#text", demo); await p.waitForTimeout(900);
+    await p.waitForFunction(() => document.querySelectorAll("#voicebox li").length === 3, null, { timeout: 30000 }).catch(() => {});
     const st = await textOf(p, "#status");
     expect(!/not a declared|unknown|is not defined/i.test(st) && !(await p.isDisabled("#make")), "the looks demo is accepted, status: " + st.slice(0, 100));
     expect((await p.$$("#voicebox li")).length === 3, "John, Mary and the Narrator each get a voice row");
     await p.evaluate(() => { const t = document.getElementById("text"); t.scrollTop = 0; t.setSelectionRange(0, 0); });
     await shot(p, "15-looks", "Text looks and per-character speed", "");
   });
+
+  // The three modes, and your own characters
+  const ROBO_PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAFAAAACQCAYAAACf+ewZAAABfklEQVR42u3cvU0DQRCA0bsRdRARUAQxMUVQAgElOKAEF0FMTBEERDQCJSCQZ2c8fl9seXef936ss7xtkiRJusT2bhO6f/n8/u01b083O8A/onXF3M8VrgtkTMDLeL/WgFmLrUCMKXhViDEJrwIxpuGtHi8m4q0cN6birRo/NvUFrN59K+ZhBwIcCtjl8M2ejx0IECBAgAIIECDAk9bp0WPmfOxAgIMBuxzGmfOwA7sDVu/C7PFjwiIqx41Ji6kYLyYuauWHFdMOq9U7veQqnLXIinNt2W3MqRdbdaHyC9VzAax4SjfqNsY3EQEECBCgAAIECFAAAQIEKIAAAQIEKIAAAQIUQIAAAQogQIAABRAgQIACCBAgQAEECBCgAAIECFAAAQIEKIAAAQIUQIAAAQogQIAAAQpgVVerB/x6PaSPcf3wvGw9y/9/9PbuMf2vQD/ej7tD2DkQoAACBAhQAAECBCiAAAECFECAAAEKIECAAAUQIECAABEAlKT/9gOWM2QH5jwMkwAAAABJRU5ErkJggg==", "base64");
+  await step("16", "Your own character", "The Characters panel lists a character you added (a small picture on a checkerboard so you can see it is transparent), with Use, + mouth and Remove. Before it was added, the status line said there was no such character in the library; afterwards that message is gone.", async () => {
+    await p.selectOption("#quality", "fast");
+    await p.fill("#text", "TITLE: Robo\nCAST: ROBO asset=robo\nCAST: MARY gender=f dress=1\nSCENE: lab\nROBO: Good morning.\nMARY: You are late, Robo.\n"); await p.waitForTimeout(800);
+    expect(/no character 'robo'/.test(await textOf(p, "#status")), "a missing library character is reported while typing: " + (await textOf(p, "#status")).slice(0, 100));
+    const [fc] = await Promise.all([p.waitForEvent("filechooser"), p.click("#addChar")]);
+    await fc.setFiles({ name: "robo.png", mimeType: "image/png", buffer: ROBO_PNG });
+    await p.waitForSelector("#library li[data-name=robo]"); await p.waitForTimeout(900);
+    expect(!/no character/.test(await textOf(p, "#status")), "after adding it the message goes away: " + (await textOf(p, "#status")).slice(0, 100));
+    expect(!(await p.isDisabled("#make")), "Make video is available");
+    await p.evaluate(() => document.getElementById("library").scrollIntoView());
+    await shot(p, "16-library", "Your own character", "");
+  });
+  await step("17", "Editor mode", "Just the code: line numbers on the left, no side panel, the line with the mistake numbered in red and named in the status line.", async () => {
+    await p.click("#tab-editor"); await p.fill("#text", "ROBO: hi\n[MOV ROBO 3]\n"); await p.waitForTimeout(800);
+    expect(!(await p.isVisible("aside")), "the side panel is hidden");
+    expect((await textOf(p, "#gutter .bad")) === "2", "line 2 is marked in the gutter");
+    expect(/unknown command/.test(await textOf(p, "#status")), "the status line names the mistake");
+    await shot(p, "17-editor", "Editor mode", "");
+  });
+  if (MAKE) {
+    await step("18", "Running mode", "The finished video with a timeline under it: a Scenes row (the title card, then each scene), and one row per speaker with a block for every line, a red playhead, a list of lines on the right, and Play, speed, zoom, Download. (The bundled headless Chromium cannot play H.264, so the picture is black here; the timeline does not depend on it.)", async () => {
+      await p.click("#tab-running"); await p.waitForSelector("#tlInner .blk", { timeout: 20000 });
+      expect((await p.$$(".blk.scene")).length === 4, "title card and three scenes on the Scenes row, got " + (await p.$$(".blk.scene")).length);
+      expect((await p.$$("#lineList li[data-i]")).length > 5, "the sample story's lines are listed");
+      expect((await p.$$(".tlrow")).length >= 4, "a row per speaker under Scenes");
+      await p.click(".blk:not(.scene)"); await p.waitForTimeout(300);
+      await shot(p, "18-running", "Running mode", "");
+    });
+  }
+  await p.click("#tab-smart"); await p.evaluate(async () => { await fetch("/api/library/remove", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "character", name: "robo" }) }); });
 
   fs.writeFileSync(path.join(OUT, "manifest.json"), JSON.stringify(manifest, null, 2));
   await browser.close();

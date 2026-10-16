@@ -3,6 +3,10 @@
 #
 # Get the installer: Actions -> "Build Blaze Installer" -> latest run -> Artifacts -> blaze-installer
 # (tick "publish_release" when running it by hand, or push a v* tag, to attach it to a GitHub Release).
+#
+# The artifact called blaze-installer exists only when the installer was full size AND the installed app passed its
+# end-to-end check. The build uploads its result as blaze-installer-unverified, which the checks use; a run that fails
+# therefore has nothing called blaze-installer to download by mistake.
 name: Build Blaze Installer
 
 on:
@@ -26,6 +30,7 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -50,6 +55,9 @@ jobs:
       - name: Stage the app and everything it needs (Python, Node, ffmpeg, headless Chromium)
         run: python installer/stage.py --download
 
+      - name: Check that everything was staged, and at full size (a hollow staging must not become an installer)
+        run: python installer/check_installer.py --stage installer/build/Blaze
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
@@ -62,16 +70,20 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
           Get-ChildItem dist | Format-Table Name, @{n="MB";e={[math]::Round($_.Length/1MB,1)}}
 
+      - name: Check that the installer is full size
+        run: python installer/check_installer.py --installer dist
+
       - uses: actions/upload-artifact@v4
         with:
-          name: blaze-installer
+          name: blaze-installer-unverified
           path: dist/Blaze_Setup_*.exe
-          retention-days: 30
+          retention-days: 7
 
   verify:
     name: Install it and use it
     needs: build
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -82,7 +94,7 @@ jobs:
           node-version: "22"
       - uses: actions/download-artifact@v4
         with:
-          name: blaze-installer
+          name: blaze-installer-unverified
           path: dist
 
       - name: Install silently (no admin rights, per user)
@@ -133,9 +145,10 @@ jobs:
 
       - name: Use the installed app end to end (start like the shortcut, make a video, close)
         shell: pwsh
+        timeout-minutes: 25
         run: |
           $d = $env:BLAZE_DIR
-          python installer/smoke_installed.py --python "$d\runtime\python\pythonw.exe" --script "$d\app\blaze_app.pyw" --quality fast --out smoke-results.json
+          python installer/smoke_installed.py --python "$d\runtime\python\pythonw.exe" --script "$d\app\blaze_app.pyw" --quality fast --make-timeout 480 --out smoke-results.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -197,12 +210,13 @@ jobs:
     name: Photograph the installer's wizard
     needs: build
     runs-on: windows-latest
+    timeout-minutes: 20
     continue-on-error: true       # best effort: it needs a desktop session; the other checks do not depend on it
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: blaze-installer
+          name: blaze-installer-unverified
           path: dist
       - name: Run the real installer, page by page
         shell: pwsh
@@ -215,16 +229,23 @@ jobs:
           name: screens-installer
           path: screens/installer
 
-  release:
+  publish:
+    name: The verified installer
     needs: [build, verify]
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: blaze-installer
+          name: blaze-installer-unverified
           path: dist
+      - uses: actions/upload-artifact@v4          # the one to download: it only exists once every check above has passed
+        with:
+          name: blaze-installer
+          path: dist/Blaze_Setup_*.exe
+          retention-days: 30
       - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
         with:
           files: dist/Blaze_Setup_*.exe
           draft: ${{ !startsWith(github.ref, 'refs/tags/v') }}

@@ -118,6 +118,22 @@ Rendering uses Blender's Cycles on the CPU, so no graphics card or display is ne
 they are in the library everything works exactly as in section 1 and 2. `python blaze.py doctor` shows whether Blender
 was found.
 
+## From the page
+
+You do not need the command line. In **Smart** mode (`python blaze.py ui`) the right-hand side has a **Characters** and a **Backdrops** panel.
+
+- **Add character** takes a PNG (transparent background, feet at the bottom edge), a JPG/WebP, or a `.blend`. The name is the file's name;
+  it is made lower-case with underscores, so `Robo Boy.png` becomes `robo_boy`.
+- **+ mouth** next to a character adds its open-mouth picture (`robo_talk.png`). Add the character first.
+- **Use** on a character writes `CAST: ROBO asset=robo` into the screenplay (or sets `asset=` on a line you already have). **Use** on a
+  backdrop inserts `BACKDROP: lab` on the line under your cursor.
+- **Remove** deletes the character with its talk and blink pictures.
+- A `.blend` upload says "Rendering in Blender" while it works, which can take a few minutes. Without Blender installed the page says so
+  and tells you to install it or add a PNG instead. A picture with no transparency is added, with a warning: it would show as a box.
+- If a screenplay names `asset=robo` and there is no such character, the status line says so on that line, before you press Make.
+
+Files go to the first of the library folders listed above (normally `./library` where you started Blaze). Limits: images 25 MB, `.blend` 300 MB.
+
 ## 4. Sharing a library
 
 The library is just folders of PNG files. Copy `library/` next to a screenplay on another computer and it works there:

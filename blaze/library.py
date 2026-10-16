@@ -5,7 +5,7 @@ The asset library: your own characters and backdrops, used instead of Blaze's ge
     library/backdrops/<name>.png                                             any image (16:9 works best)
 
 Use them from a screenplay:
-    CAST: ROBO = asset:robo        (or just name the character ROBO: a library character with that name is picked up)
+    CAST: ROBO asset=robo          (or just name the character ROBO: a library character with that name is picked up)
     BACKDROP: lab                  (a library backdrop, or a path relative to the screenplay)
 
 Add to it with `blaze asset add <file>` (PNG/JPG, or a .blend rendered through Blender).

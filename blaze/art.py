@@ -133,8 +133,13 @@ def parse_pairs(text: str) -> Dict[str, str]:
     """'a=1 b=0xff c=x' -> {'a': '1', 'b': '0xff', 'c': 'x'}; anything that is not key=value is an error."""
     out: Dict[str, str] = {}
     for tok in (text or "").split():
-        if "=" not in tok:
-            raise ValueError(f"expected key=value, got {tok!r}")
+        if "=" not in tok or tok.startswith("="):
+            hint = ""
+            if tok == "=" or tok.startswith("="):
+                hint = " (a CAST line is the name, then key=value pairs: CAST: ROBO asset=robo. The old form CAST: ROBO = asset:robo is gone)"
+            elif ":" in tok and tok.split(":", 1)[0].isidentifier():
+                hint = f" (write {tok.split(':', 1)[0]}={tok.split(':', 1)[1]})"
+            raise ValueError(f"expected key=value, got {tok!r}{hint}")
         k, v = tok.split("=", 1)
         out[k.strip().lower()] = v.strip()
     return out
@@ -491,3 +496,17 @@ def make_title_background(top: RGB, bottom: RGB, out_path: Path, seed: int = 7) 
     out_path = Path(out_path); out_path.parent.mkdir(parents=True, exist_ok=True)
     im.convert("RGB").save(out_path)
     return out_path
+
+
+def cast_problem(cast: Dict[str, str]) -> Optional[Tuple[str, str]]:
+    """The first CAST line that cannot be drawn, as (character, message), or None. Exactly the checks `blaze make` does before it
+    draws anything, so the page can report them while you type instead of after you press Make. A library `asset=` is not
+    looked up here (that needs the library folder)."""
+    for name, desc in cast.items():
+        try:
+            pairs = parse_pairs(desc) if desc.strip() else {}
+            appearance_for(name, " ".join(f"{k}={v}" for k, v in pairs.items() if k != "asset"))
+        except ValueError as e:
+            return name, str(e)
+    return None
+

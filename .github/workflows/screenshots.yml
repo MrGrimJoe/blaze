@@ -27,6 +27,7 @@ jobs:
   page:
     name: The Blaze page
     runs-on: ubuntu-latest
+    timeout-minutes: 30        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -71,6 +72,7 @@ jobs:
   studio:
     name: The desktop studio's windows
     runs-on: ubuntu-latest
+    timeout-minutes: 30        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -100,6 +102,7 @@ jobs:
     needs: [installer, page, studio]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 15        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -149,6 +152,7 @@ jobs:
     needs: [installer, page, studio, gallery]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 10        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - name: Write the report
         run: |

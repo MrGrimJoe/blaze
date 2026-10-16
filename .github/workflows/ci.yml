@@ -38,6 +38,7 @@ jobs:
           - os: windows-latest
             skips: "Blender|fake executable is a shell script|CI sets BLAZE_REQUIRE_(BLENDER|PIPER)|real piper program|espeak-ng"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60        # a stuck job fails with its log in minutes instead of running for hours
     env:
       QT_QPA_PLATFORM: offscreen
       BLAZE_REQUIRE_VOICE: "1"          # a missing voice engine fails the build instead of being skipped
@@ -128,6 +129,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45        # a stuck job fails with its log in minutes instead of running for hours
     env:
       QT_QPA_PLATFORM: offscreen
     defaults:
@@ -144,7 +146,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: "ffmpeg and the browser the offline demo renders with (Linux only; the window's real end-to-end tests run here)"
+      - name: "ffmpeg and the browser the offline demo renders with (Linux only; the window's real end-to-end tests run here, and the one that needs the browser may be skipped on Windows only)"
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -y ffmpeg
@@ -178,7 +180,7 @@ jobs:
 
       - name: Test report (counts per file, every skip and its reason)
         if: ${{ !cancelled() }}
-        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY"
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY" ${{ matrix.os == 'windows-latest' && '--allow-skip "needs node . playwright/Chromium"' || '' }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -188,6 +190,7 @@ jobs:
   blender:
     name: Blender characters and backdrops
     runs-on: ubuntu-latest
+    timeout-minutes: 30        # a stuck job fails with its log in minutes instead of running for hours
     env:
       BLAZE_REQUIRE_BLENDER: "1"        # the Blender tests must run here, not be skipped
     defaults:
@@ -250,6 +253,7 @@ jobs:
           - os: windows-latest
             skips: "espeak-ng"
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45        # a stuck job fails with its log in minutes instead of running for hours
     env:
       BLAZE_REQUIRE_PIPER: "1"          # a missing Piper or voice model fails the build instead of being skipped
       BLAZE_REQUIRE_VOICE: "1"
@@ -328,6 +332,7 @@ jobs:
   docs-and-licence:
     name: Documentation and licence
     runs-on: ubuntu-latest
+    timeout-minutes: 15        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -353,6 +358,7 @@ jobs:
     if: ${{ !cancelled() }}
     needs: [blaze, studio, blender, piper]
     runs-on: ubuntu-latest
+    timeout-minutes: 10        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

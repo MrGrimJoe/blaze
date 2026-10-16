@@ -52,6 +52,9 @@ python blaze.py ui [--port 8765] [--no-browser] [--out DIR] [--library DIR]
 Serves the page on `127.0.0.1` only (requests from any other host name are refused) and opens it in your browser. Videos
 are kept in `--out` (default `./blaze-videos`). Stop it with Ctrl+C.
 
+The page has three modes, **Editor**, **Smart** and **Running** (open one directly with `http://127.0.0.1:8765/#editor`). Characters and
+backdrops you add in Smart are saved in `--library` (default `./library`), the same place `blaze make` and `blaze asset` use.
+
 ## `expand`: see what the shorthand means
 
 ```

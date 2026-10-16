@@ -169,7 +169,7 @@ def test_blender_assets_end_to_end(fixtures, tmp_path):
     lib = Library([tmp_path / "library"])
     lib.add_character(fixtures / "robot.blend", "robo", samples=4)
     lib.add_backdrop(fixtures / "shot.blend", "lab", samples=2, size=(640, 360))
-    res = make("CAST: ROBO = asset:robo\nSCENE: x\nBACKDROP: lab\nROBO: Hello.\nMARY: Hi!\n", tmp_path / "o.mp4",
+    res = make("CAST: ROBO asset=robo\nSCENE: x\nBACKDROP: lab\nROBO: Hello.\nMARY: Hi!\n", tmp_path / "o.mp4",
                Options(width=320, height=180, fps=8, voice="off", library=tmp_path / "library", progress=lambda m: None))
     assert res.video.exists() and res.video.stat().st_size > 1000
 

@@ -47,7 +47,10 @@ The page has three parts:
 - **Left: the screenplay.** Type here. It is saved in your browser as you go.
 - **Right: what Blaze understood.** Title, cast and scenes appear as you type. If something is wrong, the bottom line
   turns red, names the problem and has a **Go to line** button.
-- **Top: quality, voices and Make video.**
+- **Top: quality, voices and Make video.** Beside the name are three tabs, which show the same screenplay in different ways:
+  **Editor** is just the code with line numbers (no side panel); **Smart** is the view described above; **Running** is the finished
+  video with a timeline under it, where you can drag the playhead, click any line to jump to it, change the speed and zoom. A dot
+  appears on **Running** when a new video is ready, and the last video is still there after you reload the page.
 
 ## 3. Make the example
 

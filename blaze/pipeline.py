@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +47,8 @@ class Options:
     node: str = "node"
     library: Optional[Path] = None   # your characters/backdrops (default: ./library next to the screenplay, then the cwd)
     progress: Callable[[str], None] = print
+    render_timeout: Optional[float] = None   # seconds one scene may take to render; None = 2 s per frame, at least 10 minutes
+    encode_timeout: float = 300              # seconds ffmpeg may take on one scene, and on joining them
 
 
 @dataclass
@@ -55,6 +59,48 @@ class Result:
     shots: int
     srt: Optional[Path]
     warnings: List[str]
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """Stop a program and everything it started (the renderer starts a browser, and a browser outlives its parent)."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, timeout=30)
+        else:
+            os.killpg(proc.pid, signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    try:
+        proc.kill()
+    except OSError:
+        pass
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _run_bounded(cmd: List[str], timeout: float, what: str, stage: str, shot: str = "") -> subprocess.CompletedProcess:
+    """Run a program and capture its output, but never wait for it forever.
+
+    The output goes to temporary files, not pipes: a browser left behind by a killed renderer can keep a pipe open, and
+    reading that pipe would then hang just as the program did. When time runs out the whole process tree is stopped and
+    a BlazeError (stage 'timeout') says what was running, so a stuck render is a message, not a job that never ends.
+    """
+    popen_kw = {"start_new_session": True} if os.name != "nt" else {}
+    with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
+        proc = subprocess.Popen(cmd, stdout=out, stderr=err, stdin=subprocess.DEVNULL, **popen_kw)
+        try:
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
+            err.seek(0)
+            tail = err.read().decode("utf-8", "replace").strip()[-300:]
+            raise BlazeError(f"{what} did not finish within {timeout:g} s and was stopped"
+                             + (f"; the last thing it said: {tail}" if tail else "; it printed nothing"), "timeout", shot) from None
+        out.seek(0)
+        err.seek(0)
+        return subprocess.CompletedProcess(cmd, proc.returncode, out.read().decode("utf-8", "replace"), err.read().decode("utf-8", "replace"))
 
 
 def _need(binary: str, hint: str) -> None:
@@ -203,7 +249,8 @@ def _run_render(shot: dict, project: Path, manifest: dict, opts: Options) -> Pat
     cmd = [opts.node, str(RENDER_SCRIPT), str(project / shot["cdrca"]), "--out", str(out), "--fps", str(fps),
            "--width", str(manifest["width"]), "--height", str(manifest["height"]),
            "--from", str(shot.get("skip", 0)), "--duration", str(frames / fps), "--format", "jpeg"]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    limit = opts.render_timeout if opts.render_timeout else max(600.0, 2.0 * frames)
+    r = _run_bounded(cmd, limit, f"The renderer (node and its headless browser) on {shot['name']}", "render", shot["name"])
     if r.returncode != 0:
         stage, msg = "render", (r.stderr or r.stdout)[-600:]
         for line in reversed((r.stderr or "").strip().splitlines()):
@@ -217,7 +264,7 @@ def _run_render(shot: dict, project: Path, manifest: dict, opts: Options) -> Pat
     return out
 
 
-def _encode_shot(shot: dict, frames_dir: Path, project: Path, manifest: dict) -> Path:
+def _encode_shot(shot: dict, frames_dir: Path, project: Path, manifest: dict, opts: Optional[Options] = None) -> Path:
     fps = manifest["fps"]
     frames = len(list(frames_dir.glob("*.jpg")))
     seconds = frames / fps
@@ -229,7 +276,7 @@ def _encode_shot(shot: dict, frames_dir: Path, project: Path, manifest: dict) ->
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(frames_dir / "%06d.jpg"), "-i", str(wav),
            "-vf", fade, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
            "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", "-shortest", str(out)]
-    r = subprocess.run(cmd, capture_output=True, text=True)
+    r = _run_bounded(cmd, (opts.encode_timeout if opts else 300), f"ffmpeg on {shot['name']}", "encode", shot["name"])
     if r.returncode != 0:
         raise BlazeError(f"ffmpeg failed on {shot['name']}: {r.stderr[-400:]}", "encode", shot["name"])
     return out
@@ -250,7 +297,7 @@ def render_project(project: Path, out_mp4: Path, opts: Options) -> Result:
 
     def one(shot):
         frames_dir = _run_render(shot, project, manifest, opts)
-        mp4 = _encode_shot(shot, frames_dir, project, manifest)
+        mp4 = _encode_shot(shot, frames_dir, project, manifest, opts)
         if not opts.keep_frames: shutil.rmtree(frames_dir, ignore_errors=True)
         log(f"  done: {shot['name']}")
         return mp4
@@ -262,8 +309,8 @@ def render_project(project: Path, out_mp4: Path, opts: Options) -> Result:
     lst = project / "shots" / "list.txt"
     lst.write_text("".join("file '%s'\n" % p.resolve().as_posix().replace("'", r"'\''") for p in mp4s), encoding="utf-8")
     out_mp4 = Path(out_mp4); out_mp4.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy",
-                        "-movflags", "+faststart", str(out_mp4)], capture_output=True, text=True)
+    r = _run_bounded(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy",
+                      "-movflags", "+faststart", str(out_mp4)], opts.encode_timeout, "ffmpeg joining the scenes", "encode")
     if r.returncode != 0:
         raise BlazeError("ffmpeg concat failed: " + r.stderr[-400:], "encode")
 

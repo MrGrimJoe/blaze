@@ -15,6 +15,7 @@ Writes smoke-results.json (and prints a table). Exit status 0 only when every ch
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import subprocess
@@ -47,6 +48,20 @@ def call(base: str, path: str, body=None, method=None, headers=None, timeout=60)
             return e.code, json.loads(raw), dict(e.headers)
         except ValueError:
             return e.code, raw, dict(e.headers)
+
+
+# a 1x1 transparent PNG: enough for the library to accept a character without needing Pillow here
+TINY_PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
+
+
+def upload(base: str, query: str, data: bytes):
+    """POST a file as the request body (how the page adds a character to the library)."""
+    req = urllib.request.Request(base + "/api/library/add?" + query, data=data, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read() or b"{}")
 
 
 def find_blaze(deadline: float):
@@ -112,6 +127,20 @@ def main(argv=None) -> int:
         s, r, _ = call(base, "/api/check", {"text": "JOHN: hi\n[MOV JOHN 3]\n"})
         check("a misspelt command is refused with a suggestion", s == 200 and r.get("ok") is False and "did you mean MOVE" in str(r.get("error", "")))
 
+        # the three modes live in the page; the library (your own characters) lives in the person's folder, not the install folder
+        check("the page has its three modes", all(f'data-mode="{m}"' in html for m in ("editor", "smart", "running")))
+        s, lib, _ = call(base, "/api/library")
+        check("the library is in the person's folder, not the install folder", s == 200 and str(app_dir) not in lib.get("home", str(app_dir)), str(lib.get("home")))
+        cast = "CAST: SMOKEBOT asset=smoke_bot\nSCENE: x\nSMOKEBOT: hi\n"
+        s, r, _ = call(base, "/api/check", {"text": cast})
+        check("a character that is not in the library is reported on its line", s == 200 and r.get("ok") is False and r.get("line") == 1 and "smoke_bot" in str(r.get("error", "")), str(r.get("error", ""))[:80])
+        s, r = upload(base, "kind=character&name=smoke_bot&filename=smoke_bot.png", TINY_PNG)
+        check("a character can be added from the page", s == 200 and r.get("ok"), json.dumps(r)[:120])
+        s, r, _ = call(base, "/api/check", {"text": cast})
+        check("after adding it the screenplay checks out", s == 200 and r.get("ok"), str(r.get("error", ""))[:80])
+        s, r, _ = call(base, "/api/library/remove", {"kind": "character", "name": "smoke_bot"})
+        check("and it can be removed again", s == 200 and r.get("ok"), json.dumps(r)[:120])
+
         # voices: the installed app must offer the system voices (Windows SAPI), play one, and use one for a character
         s, r, _ = call(base, "/api/voices")
         engines = {e["engine"]: e for e in r.get("engines", [])} if s == 200 and isinstance(r, dict) else {}
@@ -151,13 +180,16 @@ def main(argv=None) -> int:
             if job["state"] != "running":
                 break
             time.sleep(3)
-        check("the video was made", job.get("state") == "done", job.get("error") or job.get("message", ""))
+        check("the video was made", job.get("state") == "done", job.get("error") or job.get("message", "") or json.dumps(job)[:300])
         if job.get("state") == "done":
             check("a voice engine was used", "silent" not in (job.get("voice") or "silent").lower(), f"voice={job.get('voice')!r} (silent means none was found: a warning, not a failure of the app)") or None
             s, body, hdr = call(base, job["video"], headers={"Range": "bytes=0-1023"})
             check("the video can be streamed with a range request", s == 206 and len(body) == 1024 and "mp4" in hdr.get("Content-Type", ""), f"status {s}")
             s, body, hdr = call(base, job["srt"])
             check("subtitles can be downloaded", s == 200 and b"-->" in body)
+            tl = job.get("timeline") or {}
+            check("the finished video carries a timeline for Running mode", len(tl.get("scenes", [])) >= 2 and len(tl.get("lines", [])) >= 1 and tl.get("seconds", 0) > 3,
+                  f"{len(tl.get('scenes', []))} scenes, {len(tl.get('lines', []))} lines, {tl.get('seconds')} s")
             videos = Path(where.get("videos", ""))
             found = list(videos.glob("*/video.mp4"))
             check("the video is in the person's Videos\\Blaze folder", bool(found) and found[0].stat().st_size > 10_000, str(videos))
@@ -176,7 +208,7 @@ def main(argv=None) -> int:
                 if job["state"] != "running":
                     break
                 time.sleep(3)
-            check("the looks demo video was made", job.get("state") == "done", job.get("error") or job.get("message", ""))
+            check("the looks demo video was made", job.get("state") == "done", job.get("error") or job.get("message", "") or json.dumps(job)[:300])
             if job.get("state") == "done":
                 s, body, _ = call(base, job["srt"])
                 check("every line of the looks demo is subtitled, drawn or not", s == 200 and body.count(b"-->") == 7, f"{body.count(b'-->')} cues")
