@@ -1,0 +1,57 @@
+[
+  {
+    "file": "01-first-run-empty.png",
+    "title": "First run: nothing chosen",
+    "check": "No provider is preselected. Save is disabled. The wording says the key stays on this computer."
+  },
+  {
+    "file": "02-anthropic-chosen.png",
+    "title": "Anthropic chosen",
+    "check": "A note says Anthropic cannot make images. The image menu offers only Gemini and OpenAI. Save is disabled."
+  },
+  {
+    "file": "03-anthropic-key-typed.png",
+    "title": "Anthropic with a key, no image source yet",
+    "check": "The key shows as dots. Save is still disabled until an image provider is chosen."
+  },
+  {
+    "file": "04-anthropic-ready.png",
+    "title": "Anthropic for text, OpenAI for images",
+    "check": "A second key field appears for the image provider. Save is enabled."
+  },
+  {
+    "file": "05-gemini-ready.png",
+    "title": "Gemini for everything",
+    "check": "Images default to the same provider, no second key field, Save is enabled."
+  },
+  {
+    "file": "07-main-empty.png",
+    "title": "Main window: nothing chosen yet",
+    "check": "Calm and empty. The provider chip says Choose an AI provider; Make video is greyed out; the hint explains the offline demo."
+  },
+  {
+    "file": "08-main-ready.png",
+    "title": "Main window: a story written, a provider chosen",
+    "check": "The chip shows both providers. Make video is dark and enabled. The hint explains what will happen."
+  },
+  {
+    "file": "09-main-working.png",
+    "title": "Main window: working",
+    "check": "A heading says what is happening, a thin progress line grows, each shot shows its own state with a coloured dot, and Cancel is available."
+  },
+  {
+    "file": "10-main-error.png",
+    "title": "Main window: something went wrong",
+    "check": "A plain sentence says what failed (in red), and a button takes you back to your story, which is kept."
+  },
+  {
+    "file": "11-main-result.png",
+    "title": "Main window: the finished offline demo",
+    "check": "A still from the video, its length and size, and Play, Show in folder and Save a copy. This one was made for real by the offline demo."
+  },
+  {
+    "file": "12-main-dark.png",
+    "title": "Main window: dark theme",
+    "check": "The same window in dark: readable text, the accent colour lifted, nothing washed out."
+  }
+]
