@@ -180,7 +180,7 @@ jobs:
 
       - name: Test report (counts per file, every skip and its reason)
         if: ${{ !cancelled() }}
-        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY" ${{ matrix.os == 'windows-latest' && '--allow-skip "needs node . playwright/Chromium"' || '' }}
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY" ${{ matrix.os == 'windows-latest' && '--allow-skip "needs node.*playwright"' || '' }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
