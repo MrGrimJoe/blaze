@@ -146,12 +146,22 @@ REAL = os.environ.get("BLAZENG_CDRCA_RENDER") or (str(_BUNDLED) if _BUNDLED.exis
 
 
 def _playwright_installed() -> bool:
-    """The real render needs the playwright package next to render.js (CI installs it on Linux only; the Windows leg has no browser)."""
+    """The real render needs the playwright package AND a downloaded Chromium browser next to
+    render.js (CI installs both on Linux; the Windows leg has neither). require('playwright')
+    alone isn't enough to tell: the npm package can resolve (e.g. from a stale node_modules or
+    cache) while the browser binary itself was never downloaded for this OS/session -- that
+    combination let this test proceed past this guard and then fail for real inside the renderer
+    with CdrcaRenderError instead of skipping cleanly here. Launching (and immediately closing) a
+    real browser is the only check that can't be fooled by a present-but-useless npm package."""
     if not (REAL and Path(REAL).exists() and shutil.which("node")):
         return False
     try:
-        return subprocess.run(["node", "-e", "require('playwright')"], cwd=str(Path(REAL).resolve().parents[2]),
-                              capture_output=True, timeout=60).returncode == 0
+        result = subprocess.run(
+            ["node", "-e", "require('playwright').chromium.launch().then(b => b.close())"],
+            cwd=str(Path(REAL).resolve().parents[2]),
+            capture_output=True, timeout=60,
+        )
+        return result.returncode == 0
     except (OSError, subprocess.SubprocessError):
         return False
 
