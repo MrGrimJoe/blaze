@@ -1,0 +1,89 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.7.0
+rootdir: D:\a\blaze\blaze
+configfile: pytest.ini
+plugins: platformdirs-4.12.4, timeout-2.4.0
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collected 48 items
+
+tests\test_voices.py ...................sssss..F+++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
+~~~~~~~~~~~~~~~~~~~~~~~~~ Stack of MainThread (8368) ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pytest\__main__.py", line 9, in <module>
+    raise SystemExit(_console_main())
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\config\__init__.py", line 253, in _console_main
+    code = _main(prog=_get_prog_name(sys.argv))
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\config\__init__.py", line 229, in _main
+    ret: ExitCode | int = config.hook.pytest_cmdline_main(config=config)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_caller.py", line 197, in __call__
+    return self._hookexec(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_manager.py", line 183, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_execution.py", line 147, in _multicall
+    res = hook_impl.function(*args)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\main.py", line 377, in pytest_cmdline_main
+    return wrap_session(config, _main)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\main.py", line 330, in wrap_session
+    session.exitstatus = doit(config, session) or 0
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\main.py", line 384, in _main
+    config.hook.pytest_runtestloop(session=session)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_caller.py", line 197, in __call__
+    return self._hookexec(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_manager.py", line 183, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_execution.py", line 147, in _multicall
+    res = hook_impl.function(*args)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\main.py", line 408, in pytest_runtestloop
+    item.config.hook.pytest_runtest_protocol(item=item, nextitem=nextitem)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_caller.py", line 197, in __call__
+    return self._hookexec(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_manager.py", line 183, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_execution.py", line 147, in _multicall
+    res = hook_impl.function(*args)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 118, in pytest_runtest_protocol
+    runtestprotocol(item, nextitem=nextitem)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 139, in runtestprotocol
+    reports.append(call_and_report(item, "call", log))
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 249, in call_and_report
+    call = CallInfo.from_call(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 361, in from_call
+    result: TResult | None = func()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 250, in <lambda>
+    lambda: runtest_hook(item=item, **kwds),
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_caller.py", line 197, in __call__
+    return self._hookexec(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_manager.py", line 183, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_execution.py", line 147, in _multicall
+    res = hook_impl.function(*args)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\runner.py", line 184, in pytest_runtest_call
+    item.runtest()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\python.py", line 1707, in runtest
+    self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_caller.py", line 197, in __call__
+    return self._hookexec(
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_manager.py", line 183, in _hookexec
+    return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pluggy\_execution.py", line 147, in _multicall
+    res = hook_impl.function(*args)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\_pytest\python.py", line 167, in pytest_pyfunc_call
+    result = testfunction(**testargs)
+  File "D:\a\blaze\blaze\tests\test_voices.py", line 221, in test_the_speed_changes_the_length
+    slow = v.synth("one two three four five six seven eight", voice.profile_for("X", voice=spec, rate=110), tmp_path / "s.wav")
+  File "D:\a\blaze\blaze\blaze\voice.py", line 365, in synth
+    return self.engine(spec.split(":", 1)[0].lower()).synth(text, profile, out_wav)
+  File "D:\a\blaze\blaze\blaze\voice.py", line 239, in synth
+    return self._synth_locked(text, profile, out_wav)
+  File "D:\a\blaze\blaze\blaze\voice.py", line 256, in _synth_locked
+    engine.runAndWait()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pyttsx3\engine.py", line 222, in runAndWait
+    self.proxy.runAndWait()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pyttsx3\driver.py", line 184, in runAndWait
+    self._driver.startLoop()
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\pyttsx3\drivers\sapi5.py", line 179, in startLoop
+    time.sleep(0.05)
++++++++++++++++++++++++++++++++++++ Timeout +++++++++++++++++++++++++++++++++++
