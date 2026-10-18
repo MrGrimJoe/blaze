@@ -1,0 +1,82 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.1.1, pluggy-1.7.0
+rootdir: D:\a\blaze\blaze
+configfile: pytest.ini
+plugins: platformdirs-4.12.4, timeout-2.4.0
+timeout: 300.0s
+timeout method: thread
+timeout func_only: False
+collected 329 items
+
+tests\test_ai_animation.py ................                              [  4%]
+tests\test_architecture.py ..                                            [  5%]
+tests\test_blaze.py ..........................s................          [ 18%]
+tests\test_blender.py .ss.........sssssss                                [ 24%]
+tests\test_ci_report.py .............                                    [ 28%]
+tests\test_installer_and_workflows.py .................................. [ 38%]
+...                                                                      [ 39%]
+tests\test_language.py ................................................. [ 54%]
+........                                                                 [ 56%]
+tests\test_launcher.py ...............                                   [ 61%]
+tests\test_license.py ....                                               [ 62%]
+tests\test_procs.py ....                                                 [ 63%]
+tests\test_ui.py .....................                                   [ 70%]
+tests\test_ui_library_and_modes.py .........................             [ 77%]
+tests\test_voice_engines.py s.s...                                       [ 79%]
+tests\test_voices.py ...................sssss.....ssssss.....s....s..... [ 95%]
+....                                                                     [ 96%]
+tests\test_workflows.py ..F.........                                     [100%]
+
+================================== FAILURES ===================================
+______________ TestShells.test_every_bash_step_has_valid_syntax _______________
+
+self = <test_workflows.TestShells object at 0x000001FCFA13A210>
+tmp_path = WindowsPath('C:/Users/runneradmin/AppData/Local/Temp/pytest-of-runneradmin/pytest-0/test_every_bash_step_has_valid0')
+
+    @pytest.mark.skipif(not shutil.which("bash"), reason="needs bash")
+    def test_every_bash_step_has_valid_syntax(self, tmp_path):
+        bad = []
+        for wf, name, job in jobs():
+            for i, step in enumerate(run_steps(job)):
+                sh = effective_shell(job, step)
+                if sh not in (None, "bash") or (sh is None and any("windows" in s for s in systems(job))):
+                    continue                                                    # PowerShell / cmd steps cannot be checked here
+                script = re.sub(r"\$\{\{.*?\}\}", "X", step["run"])
+                script = script.replace("\\\r\n", "\\\n")
+                f = tmp_path / f"{wf}-{name}-{i}.sh"
+                f.write_text(script, encoding="utf-8")
+                r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
+                if r.returncode:
+                    bad.append(f"{wf}:{name}:{step.get('name', i)}: {r.stderr.strip()}")
+>       assert not bad, "\\n".join(bad)
+E       AssertionError: ci.yml:blaze:Tools (Linux): \nci.yml:blaze:Tools (macOS): \nci.yml:blaze:Tools (Windows): \nci.yml:blaze:Python packages: \nci.yml:blaze:The renderer's browser: \nci.yml:blaze:5: \nci.yml:blaze:Blaze's tests (real renders, voices, the page's server, the launcher): \nci.yml:blaze:Commit pytest log on failure (self-diagnosing): \nci.yml:blaze:Fail the job if the tests actually failed: \nci.yml:blaze:CDRCA's tests: \nci.yml:blaze:Test report (counts per file, every skip and its reason): \nci.yml:studio:Qt system libraries: \nci.yml:studio:ffmpeg and the browser the offline demo renders with (Linux only; the window's real end-to-end tests run here, and the one that needs the browser may be skipped on Windows only): \nci.yml:studio:ffmpeg (Windows -- VideoAssembler's tests need it here too, just not the browser): \nci.yml:studio:3: \nci.yml:studio:The studio's tests (the main window, the whole offline run, providers, orchestrator): \nci.yml:studio:Commit studio pytest log on failure (self-diagnosing): \nci.yml:studio:Fail the job if the studio's tests actually failed: \nci.yml:studio:Test report (counts per file, every skip and its reason): \nci.yml:blender:0: \nci.yml:blender:1: \nci.yml:blender:The renderer's browser: \nci.yml:blender:Blender tests: \nci.yml:blender:Commit blender pytest log on failure (self-diagnosing): \nci.yml:blender:Fail the job if the blender tests actually failed: \nci.yml:blender:Test report (no skips are accepted here, Blender is installed on purpose): \nci.yml:piper:Tools (Linux): \nci.yml:piper:Tools (Windows): \nci.yml:piper:Python packages (the real Piper, and the Windows system voices): \nci.yml:piper:The renderer's browser: \nci.yml:piper:Download the voice model: \nci.yml:piper:5: \nci.yml:piper:Voice tests, with the real Piper (real audio, real speed changes, a real video): \nci.yml:piper:Commit piper pytest log on failure (self-diagnosing): \nci.yml:piper:Fail the job if the piper tests actually failed: \nci.yml:piper:Test report (counts per file, every skip and its reason): \nci.yml:docs-and-licence:0: \nci.yml:docs-and-licence:Links work and every screenplay shown in the docs parses: \nci.yml:docs-and-licence:Workflow files are valid (actionlint, with shellcheck for the bash steps): \nci.yml:docs-and-licence:The repository licence is the CDRCA one: \nci.yml:docs-and-licence:Compare with the licence in the live CDRCA repository: \nci.yml:test-report:One table for every test run (a run that never reported fails here): \nscreenshots.yml:page:0: \nscreenshots.yml:page:1: \nscreenshots.yml:page:The renderer's browser: \nscreenshots.yml:page:Start Blaze (its own temporary config, so nothing real is touched): \nscreenshots.yml:page:Photograph every state (real Google Chrome): \nscreenshots.yml:studio:0: \nscreenshots.yml:studio:1: \nscreenshots.yml:studio:The browser the offline demo renders with (so the finished-video screen is a real run): \nscreenshots.yml:studio:3: \nscreenshots.yml:gallery:Build the gallery: \nscreenshots.yml:gallery:Publish the gallery on the ci-screenshots branch: \nscreenshots.yml:gallery:Summary: \nscreenshots.yml:report:Write the report: 
+E       assert not ['ci.yml:blaze:Tools (Linux): ', 'ci.yml:blaze:Tools (macOS): ', 'ci.yml:blaze:Tools (Windows): ', 'ci.yml:blaze:Python packages: ', "ci.yml:blaze:The renderer's browser: ", 'ci.yml:blaze:5: ', ...]
+
+tests\test_workflows.py:85: AssertionError
+----------- generated xml file: D:\a\blaze\blaze\reports\pytest.xml -----------
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_blaze.py:132: espeak-ng/ffmpeg missing
+SKIPPED [1] tests\test_blender.py:37: fake executable is a shell script
+SKIPPED [1] tests\test_blender.py:45: fake executable is a shell script
+SKIPPED [1] tests\test_blender.py:131: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:136: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:147: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:151: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:155: Blender not installed (python blaze.py doctor)
+SKIPPED [1] tests\test_blender.py:161: needs Blender + the renderer
+SKIPPED [1] tests\test_blender.py:177: CI sets BLAZE_REQUIRE_BLENDER so a missing Blender fails the build
+SKIPPED [2] tests\test_voice_engines.py:13: espeak is not available here
+SKIPPED [1] tests\test_voices.py:144: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:151: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:158: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:167: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:176: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:253: CI sets BLAZE_REQUIRE_PIPER so a missing Piper fails the build
+SKIPPED [1] tests\test_voices.py:263: needs the real piper program, a voice model and ffmpeg
+SKIPPED [1] tests\test_voices.py:268: needs the real piper program, a voice model and ffmpeg
+SKIPPED [1] tests\test_voices.py:275: needs the real piper program, a voice model and ffmpeg
+SKIPPED [1] tests\test_voices.py:283: needs the real piper program, a voice model and ffmpeg
+SKIPPED [1] tests\test_voices.py:297: needs the real piper program, a voice model and the renderer (node, playwright, ffmpeg)
+SKIPPED [1] tests\test_voices.py:349: needs espeak-ng and ffmpeg
+SKIPPED [1] tests\test_voices.py:398: needs espeak-ng and ffmpeg
+============ 1 failed, 303 passed, 25 skipped in 109.08s (0:01:49) ============
