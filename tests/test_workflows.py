@@ -9,7 +9,9 @@ The GitHub workflow files, checked for the mistakes that only show up on a runne
 
 tests/test_installer_and_workflows.py checks the workflows against the installer and the files they use.
 """
+import functools
 import itertools
+import os
 import re
 import shutil
 import subprocess
@@ -24,6 +26,30 @@ WORKFLOWS = {p.name: yaml.safe_load(p.read_text(encoding="utf-8")) for p in sort
 CI = WORKFLOWS["ci.yml"]["jobs"]
 
 BASHISM = re.compile(r"(\bif \[|\$\(|\bfi\b|\bexport \w+=|<<|\[\[ |;\s*then\b|\bfor \w+ in\b|\$\{[A-Za-z_]+[:#%/]|\|\| true|&& break|\bnohup\b|\bset -[eux])")
+
+
+@functools.lru_cache(maxsize=None)
+def working_bash():
+    """A bash that really runs, or None. `bash` on a Windows runner is usually C:\\Windows\\System32\\bash.exe, the WSL launcher: with
+    no Linux distribution installed it exits with an error and no message for every script, so the first one that answers is
+    used, with Git for Windows' own bash looked for first."""
+    candidates = []
+    if os.name == "nt":
+        for root in (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), os.environ.get("LOCALAPPDATA")):
+            if root:
+                candidates += [os.path.join(root, "Git", "bin", "bash.exe"), os.path.join(root, "Git", "usr", "bin", "bash.exe"),
+                               os.path.join(root, "Programs", "Git", "bin", "bash.exe")]
+    candidates.append(shutil.which("bash"))
+    for exe in candidates:
+        if not exe or not os.path.exists(exe):
+            continue
+        try:
+            r = subprocess.run([exe, "-c", "echo ok"], capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if r.returncode == 0 and r.stdout.strip() == "ok":
+            return exe
+    return None
 
 
 def jobs():
@@ -67,7 +93,7 @@ class TestShells:
                     assert effective_shell(job, step) == "bash", \
                         f"{wf}:{name}: {step.get('name', '')!r} pipes into tee without an explicit `shell: bash`; without pipefail a failing test would show as a pass"
 
-    @pytest.mark.skipif(not shutil.which("bash"), reason="needs bash")
+    @pytest.mark.skipif(not working_bash(), reason="needs a bash that runs (on Windows: Git for Windows' bash, not the WSL launcher)")
     def test_every_bash_step_has_valid_syntax(self, tmp_path):
         bad = []
         for wf, name, job in jobs():
@@ -79,7 +105,7 @@ class TestShells:
                 script = script.replace("\\\r\n", "\\\n")
                 f = tmp_path / f"{wf}-{name}-{i}.sh"
                 f.write_text(script, encoding="utf-8")
-                r = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
+                r = subprocess.run([working_bash(), "-n", f.as_posix()], capture_output=True, text=True)     # C:/... works in Git bash, C:\\... does not
                 if r.returncode:
                     bad.append(f"{wf}:{name}:{step.get('name', i)}: {r.stderr.strip()}")
         assert not bad, "\\n".join(bad)
