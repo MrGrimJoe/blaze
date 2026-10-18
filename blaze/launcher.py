@@ -129,13 +129,17 @@ def main(argv=None) -> int:
     except RuntimeError as e:
         print(e)
         return 1
+    # BLAZE_NO_BROWSER=1: do not open a browser (for scripts and tests). A page that is open pings every few seconds, and that
+    # keeps the app alive: an app started by a test on a machine with a default browser would otherwise never stop.
+    open_browser = not os.environ.get("BLAZE_NO_BROWSER")
     if running:                                   # Blaze is already open: just show it again
-        webbrowser.open(f"http://127.0.0.1:{port}")
+        if open_browser:
+            webbrowser.open(f"http://127.0.0.1:{port}")
         return 0
     if str(loc["app"]) not in sys.path:
         sys.path.insert(0, str(loc["app"]))
     from blaze.ui import serve
-    return serve(port=port, open_browser=True, workdir=loc["videos"], library=loc["library"], auto_exit=True)
+    return serve(port=port, open_browser=open_browser, workdir=loc["videos"], library=loc["library"], auto_exit=True)
 
 
 if __name__ == "__main__":

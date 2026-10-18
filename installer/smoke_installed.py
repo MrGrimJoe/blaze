@@ -100,6 +100,7 @@ def main(argv=None) -> int:
     script = Path(a.script).resolve()
     app_dir = script.parent
     env = dict(os.environ)
+    env["BLAZE_NO_BROWSER"] = "1"       # the machine's own browser would open the page, ping it for ever, and so keep the app from stopping
     env.pop("BLAZE_CONFIG", None)       # the app must choose its own (a PLAYWRIGHT_BROWSERS_PATH from outside is left alone: the app overrides it when it bundles a browser)
     if a.home:
         home = Path(a.home).resolve()

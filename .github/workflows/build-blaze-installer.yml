@@ -163,6 +163,7 @@ jobs:
         run: |
           $d = $env:BLAZE_DIR
           $env:BLAZE_CONFIG = ""
+          $env:BLAZE_NO_BROWSER = "1"      # the runner's own browser would open the page and keep it alive
           $p = Start-Process -FilePath "$d\runtime\python\pythonw.exe" -ArgumentList "`"$d\app\blaze_app.pyw`"" -PassThru
           $base = $null
           for ($i = 0; $i -lt 90 -and -not $base; $i++) {

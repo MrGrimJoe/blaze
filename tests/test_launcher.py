@@ -209,3 +209,30 @@ def test_blaze_studio_opens_and_makes_the_offline_demo_through_its_window(tmp_pa
     out = json.loads(r.stdout[r.stdout.index("{"):])
     assert out["ok"] and out["shots"] == 3 and out["video_bytes"] > 20_000
     assert (tmp_path / "ad" / "Blaze" / "Studio").exists() or True      # its data folder is per user (checked in the studio's own tests)
+
+
+class TestNoBrowser:
+    """A page that is open pings every few seconds and so keeps the app from stopping: scripts and tests can ask for no browser."""
+
+    def run_main(self, tmp_path, monkeypatch, running):
+        opened, served = [], {}
+        loc = {"app": tmp_path, "videos": tmp_path / "v", "library": tmp_path / "l", "log": tmp_path / "log.txt"}
+        monkeypatch.setattr(launcher, "locations", lambda: loc)
+        monkeypatch.setattr(launcher, "_redirect_output_if_windowless", lambda log: None)
+        monkeypatch.setattr(launcher, "prepare", lambda loc: None)
+        monkeypatch.setattr(launcher, "pick_port", lambda: (8765, running))
+        monkeypatch.setattr(launcher.webbrowser, "open", lambda url: opened.append(url))
+        monkeypatch.setattr(ui, "serve", lambda **kw: served.update(kw) or 0)
+        assert launcher.main([]) == 0
+        return opened, served
+
+    def test_by_default_the_browser_is_opened(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("BLAZE_NO_BROWSER", raising=False)
+        assert self.run_main(tmp_path, monkeypatch, False)[1]["open_browser"] is True
+        assert self.run_main(tmp_path, monkeypatch, True)[0] == ["http://127.0.0.1:8765"]
+
+    def test_with_no_browser_asked_for_none_is_opened_either_way(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("BLAZE_NO_BROWSER", "1")
+        opened, served = self.run_main(tmp_path, monkeypatch, False)
+        assert served["open_browser"] is False and served["auto_exit"] is True and opened == []
+        assert self.run_main(tmp_path, monkeypatch, True)[0] == []
