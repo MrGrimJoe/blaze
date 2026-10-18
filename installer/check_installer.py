@@ -27,7 +27,7 @@ STAGED = [
     ("ffprobe", "runtime/ffmpeg/ffprobe.exe", 50),
     ("headless Chromium", "runtime/browsers", 80),
     ("the renderer's playwright", "app/cdrca/node_modules/playwright/package.json", 0.0005),
-    ("Blaze itself", "app/blaze_app.pyw", 0.0005),
+    ("Blaze itself", "app/blaze_app.pyw", 0.0001),     # the launcher is a 269-byte file: the floor only asks that it is there and not empty
     ("Blaze Studio", "app/studio/main.py", 0.0005),
 ]
 INSTALLER_MIN_MB = 150

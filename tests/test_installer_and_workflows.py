@@ -316,3 +316,23 @@ class TestTheInstallerCheckSaysWhatIsWrong:
     def test_off_actions_nothing_extra_is_printed(self, tmp_path, monkeypatch, capsys):
         code, out = self.run_check(tmp_path, monkeypatch, capsys, False)
         assert code == 1 and "::" not in out.out + out.err
+
+
+def test_the_staged_app_passes_the_installers_own_size_check(tmp_path):
+    """What stage.py puts in app/ (no downloads needed) must pass the floors check_installer.py sets for it: the build failed on
+    every push because the launcher, a 269-byte file, was below a floor of 524 bytes."""
+    import importlib.util
+
+    def load(name, rel):
+        spec = importlib.util.spec_from_file_location(name, REPO / rel)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    stage, check = load("stage_under_test", "installer/stage.py"), load("check_under_test", "installer/check_installer.py")
+    out = tmp_path / "Blaze"
+    out.mkdir()
+    stage.stage_app(out)
+    rows = [r for r in check.STAGED if r[0] in ("Blaze itself", "Blaze Studio")]
+    assert len(rows) == 2
+    assert check.check_stage(out, rows) == []
