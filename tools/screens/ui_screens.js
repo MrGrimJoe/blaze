@@ -30,7 +30,12 @@ async function step(name, title, check, fn) {
   try { await fn(); } catch (e) {
     failed++; manifest.push({ file: "", title, check, error: String(e.message || e).split("\n")[0] });
     console.log("  FAIL " + name + ": " + String(e.message || e).split("\n")[0]);
+    annotate("error", "Screen " + name + " failed", String(e.message || e).split("\n")[0]);
   }
+}
+// On GitHub Actions a failure is also an annotation: it is on the run's page and available from the API, which a job log is not.
+function annotate(level, title, message) {
+  if (process.env.GITHUB_ACTIONS === "true") console.log(`::${level} title=${title}::` + String(message).replace(/%/g, "%25").replace(/\r/g, "%0D").replace(/\n/g, "%0A").slice(0, 500));
 }
 
 (async () => {
@@ -187,4 +192,4 @@ async function step(name, title, check, fn) {
   await browser.close();
   console.log(failed ? `${failed} screen(s) failed` : "all screens captured");
   process.exit(failed ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(2); });
+})().catch((e) => { console.error(e); annotate("error", "Screens script crashed", String((e && e.stack) || e).split("\n").slice(0, 4).join(" | ")); process.exit(2); });
