@@ -18,10 +18,13 @@ from __future__ import annotations
 
 import difflib
 import hashlib
+import json
 import os
 import re
 import shutil
 import subprocess
+import sys
+import tempfile
 import threading
 import wave
 from dataclasses import dataclass
@@ -58,6 +61,8 @@ def wav_seconds(path: Path) -> float:
 
 
 ENGINE_TIMEOUT = 120      # seconds one line of speech (or one ffmpeg conversion) may take before it is called stuck
+SYSTEM_VOICE_TIMEOUT = 60  # the same for the system voice (Windows SAPI / macOS NSSpeech), which is asked in a process of its own
+SYSTEM_VOICE_WORKER = Path(__file__).with_name("_sapi_worker.py")
 _SYSTEM_VOICE_LOCK = threading.Lock()   # Windows SAPI / macOS NSSpeech engines are not safe to run from several threads at once
 
 
@@ -91,6 +96,17 @@ def _require_audio(raw: Path, engine: str, detail: str = "") -> None:
     not give a silent video. Seen for real: Windows pyttsx3 wrote 78-byte WAV headers with zero frames."""
     if not raw.exists() or wav_seconds(raw) <= 0:
         raise RuntimeError(f"{engine} produced no audio (the file is missing or has zero frames)" + (f"; {detail}" if detail else ""))
+
+
+def _python_exe() -> str:
+    """The Python that runs the system-voice worker: this one, but python.exe when this is pythonw.exe (the installed app starts
+    from a .pyw file), because a child with no console is no use to a program that is only asked to write a file."""
+    exe = sys.executable
+    if os.name == "nt" and exe.lower().endswith("pythonw.exe"):
+        alt = exe[: -len("pythonw.exe")] + "python.exe"
+        if os.path.exists(alt):
+            return alt
+    return exe
 
 
 def _exe(name: str) -> str:
@@ -239,28 +255,31 @@ class Pyttsx3Voice:
             return self._synth_locked(text, profile, out_wav)
 
     def _synth_locked(self, text: str, profile: Profile, out_wav: Path) -> Optional[float]:
-        import pyttsx3
-        engine = pyttsx3.init()
-        voices = engine.getProperty("voices") or []
-        chosen = _voice_part(profile, "pyttsx3")
-        if chosen:
-            engine.setProperty("voice", chosen)
-        else:
-            want = [v for v in voices if (("female" in (v.name or "").lower() or "zira" in (v.name or "").lower()) == (profile.gender == "f"))]
-            pool = want or voices
-            if pool:
-                engine.setProperty("voice", pool[profile.seed % len(pool)].id)
-        engine.setProperty("rate", profile.rate or self.wpm)
+        """The system voice speaks in a process of its own (blaze/_sapi_worker.py), with a time limit. Inside this process
+        pyttsx3's runAndWait() could wait for ever on Windows, and a call that never returns cannot be stopped from outside."""
         raw = out_wav.with_suffix(".raw.wav")
-        engine.save_to_file(text, str(raw))
-        engine.runAndWait()
-        engine.stop()
+        raw.unlink(missing_ok=True)
+        req = {"text": text, "wav": str(raw), "voice": _voice_part(profile, "pyttsx3"), "female": profile.gender == "f",
+               "seed": profile.seed, "rate": profile.rate or self.wpm}
+        with tempfile.TemporaryDirectory() as tmp:
+            req_file, res_file = Path(tmp) / "request.json", Path(tmp) / "result.json"
+            req_file.write_text(json.dumps(req), encoding="utf-8")
+            try:
+                r = procs.run_bounded([_python_exe(), str(SYSTEM_VOICE_WORKER), str(req_file), str(res_file)], SYSTEM_VOICE_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                raise RuntimeError(f"the system voice (pyttsx3) did not finish within {SYSTEM_VOICE_TIMEOUT} s and was stopped") from None
+            try:
+                res = json.loads(res_file.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                res = {}
+        if res.get("error") or r.returncode != 0:
+            raise RuntimeError("the system voice (pyttsx3) failed: " + (res.get("error") or (r.stderr or "")[-300:] or f"exit code {r.returncode}"))
         if not raw.exists() or wav_seconds(raw) <= 0:
             raise RuntimeError(
                 "pyttsx3 produced no audio (file exists but has zero frames -- "
                 "on Windows this usually means no SAPI voice is installed on "
-                "this machine; engine.getProperty('voices') returned "
-                f"{len(voices)} voice(s))"
+                "this machine; the system has "
+                f"{res.get('voices', '?')} voice(s))" + (f"; SAPI said: {res['sapi_error']}" if res.get("sapi_error") else "")
             )
         _normalise(raw, out_wav)
         raw.unlink(missing_ok=True)

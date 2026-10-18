@@ -1,5 +1,7 @@
 """A voice per character: engines, listing, checking, the pipeline, the page's endpoints and the CLI."""
 import functools
+import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -7,6 +9,7 @@ import stat
 import subprocess
 import sys
 import threading
+import time
 import urllib.request
 import wave
 from pathlib import Path
@@ -165,7 +168,10 @@ class TestEspeakPerCharacter:
         v = voice.get_voice("espeak")
         a = v.synth("Hello there.", voice.profile_for("Ana", "f"), tmp_path / "a.wav")
         b = v.synth("Hello there.", voice.profile_for("Ana", "f", voice="auto"), tmp_path / "b.wav")
-        assert (tmp_path / "a.wav").read_bytes() == (tmp_path / "b.wav").read_bytes() and a == b
+        wa, wb = (tmp_path / "a.wav").read_bytes(), (tmp_path / "b.wav").read_bytes()
+        # compared by size, checksum and length: when they differ pytest must not try to diff two whole audio files (on macOS
+        # difflib spent the rest of the job on that, which hid the failure)
+        assert (len(wa), hashlib.sha256(wa).hexdigest(), a) == (len(wb), hashlib.sha256(wb).hexdigest(), b)
 
     def test_preview_speaks_a_sample(self, tmp_path):
         secs = voice.preview("Testing one two", "espeak:en-us+m1", tmp_path / "p.wav")
@@ -409,3 +415,80 @@ class TestPageEndpoints:
     def test_the_page_has_the_voice_panel(self):
         html = (Path(__file__).resolve().parent.parent / "blaze" / "ui_assets" / "index.html").read_text(encoding="utf-8")
         assert "/api/voices" in html and "/api/voice-preview" in html and "setCastKey" in html
+
+
+FAKE_WORKER = """import json, sys, time, wave
+req = json.load(open(sys.argv[1], encoding="utf-8"))
+mode = req["text"]
+if mode == "hang":
+    time.sleep(300)
+if mode == "boom":
+    json.dump({"error": "RuntimeError: no such voice"}, open(sys.argv[2], "w"))
+    sys.exit(0)
+frames = 0 if mode == "silent" else 11025
+with wave.open(req["wav"], "wb") as w:
+    w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050); w.writeframes(b"\\x00\\x00" * frames)
+json.dump({"voices": 2, "engine": "fake", "seen": req}, open(sys.argv[2], "w"))
+"""
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg missing")
+class TestTheSystemVoiceRunsInAProcessOfItsOwn:
+    """pyttsx3's runAndWait() never returned on the Windows runner. The system voice now runs in blaze/_sapi_worker.py, in a
+    process that is stopped when time runs out, so these use a stand-in worker (the real one needs a real system voice)."""
+
+    @pytest.fixture
+    def speaker(self, tmp_path, monkeypatch):
+        worker = tmp_path / "fake_worker.py"
+        worker.write_text(FAKE_WORKER, encoding="utf-8")
+        monkeypatch.setattr(voice, "SYSTEM_VOICE_WORKER", worker)
+        v = object.__new__(voice.Pyttsx3Voice)        # no pyttsx3 needed: the stand-in does the speaking
+        v.wpm = 150
+        return v
+
+    def test_a_line_is_spoken_and_normalised(self, speaker, tmp_path):
+        seconds = speaker.synth("hello", voice.profile_for("Ana", "f", rate=170), tmp_path / "x.wav")
+        assert seconds == pytest.approx(0.5, abs=0.05) and (tmp_path / "x.wav").stat().st_size > 2000
+        assert not (tmp_path / "x.raw.wav").exists()
+
+    def test_a_voice_that_never_answers_is_an_error_after_the_limit(self, speaker, tmp_path, monkeypatch):
+        monkeypatch.setattr(voice, "SYSTEM_VOICE_TIMEOUT", 2)
+        t0 = time.time()
+        with pytest.raises(RuntimeError, match="did not finish within 2 s"):
+            speaker.synth("hang", voice.profile_for("Ana"), tmp_path / "x.wav")
+        assert time.time() - t0 < 30
+
+    def test_the_workers_own_error_is_the_message(self, speaker, tmp_path):
+        with pytest.raises(RuntimeError, match="no such voice"):
+            speaker.synth("boom", voice.profile_for("Ana"), tmp_path / "x.wav")
+
+    def test_a_silent_result_is_an_error_not_a_silent_video(self, speaker, tmp_path):
+        with pytest.raises(RuntimeError, match="produced no audio"):
+            speaker.synth("silent", voice.profile_for("Ana"), tmp_path / "x.wav")
+
+
+class TestTheWorkersChoiceOfVoice:
+    @pytest.fixture
+    def worker(self):
+        spec = importlib.util.spec_from_file_location("sapi_worker_under_test", voice.SYSTEM_VOICE_WORKER)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    VOICES = [("tok\\ZIRA", "Microsoft Zira Desktop"), ("tok\\DAVID", "Microsoft David Desktop"), ("tok\\MARK", "Microsoft Mark")]
+
+    def test_a_voice_asked_for_by_id_or_by_a_part_of_its_name(self, worker):
+        assert worker._pick(self.VOICES, "tok\\MARK", False, 0) == "tok\\MARK"
+        assert worker._pick(self.VOICES, "david", False, 0) == "tok\\DAVID"
+
+    def test_a_voice_that_is_missing_or_ambiguous_is_an_error(self, worker):
+        with pytest.raises(ValueError, match="was not found"):
+            worker._pick(self.VOICES, "nobody", False, 0)
+        with pytest.raises(ValueError, match="several"):
+            worker._pick(self.VOICES, "microsoft", False, 0)
+
+    def test_without_a_request_the_gender_and_the_seed_choose(self, worker):
+        assert worker._pick(self.VOICES, "", True, 7) == "tok\\ZIRA"
+        assert worker._pick(self.VOICES, "", False, 0) in ("tok\\DAVID", "tok\\MARK")
+        assert worker._pick(self.VOICES, "", False, 3) == worker._pick(self.VOICES, "", False, 3)
+        assert worker._pick([], "", False, 3) is None

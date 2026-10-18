@@ -254,6 +254,7 @@ This README links every file, so you can start here for anything.
 | [blaze/voice.py](blaze/voice.py) | the voice engines (espeak-ng, system voices, Piper), a voice per character, listing and checks |
 | [blaze/pipeline.py](blaze/pipeline.py) | the whole run: check, draw, speak, compile, render, join |
 | [blaze/procs.py](blaze/procs.py) | running a program with a limit that also holds on Windows (the voice engines use it) |
+| [blaze/_sapi_worker.py](blaze/_sapi_worker.py) | speaks one line with the system voice in a process of its own, so a voice that never answers can be stopped |
 | [blaze/cli.py](blaze/cli.py) | the commands (`make`, `build`, `expand`, `voices`, `ui`, `ai`, `asset`, `doctor`, `setup`) |
 | [blaze/ui.py](blaze/ui.py), [blaze/ui_assets/index.html](blaze/ui_assets/index.html) | the page's server, and the page |
 | [blaze/ai.py](blaze/ai.py) | the optional AI writer |

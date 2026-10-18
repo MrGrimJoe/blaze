@@ -43,7 +43,7 @@ def run_bounded(cmd: List[str], timeout: float, input: Optional[str] = None, enc
     Raises subprocess.TimeoutExpired (with what the program had printed so far) after stopping the whole process tree, and
     OSError when the program cannot be started, exactly as subprocess.run does.
     """
-    popen_kw = {"start_new_session": True} if os.name != "nt" else {}
+    popen_kw = {"start_new_session": True} if os.name != "nt" else {"creationflags": 0x08000000}      # CREATE_NO_WINDOW
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err, tempfile.TemporaryFile() as stdin:
         if input is not None:
             stdin.write(input.encode(encoding))
