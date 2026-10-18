@@ -32,7 +32,16 @@ results: list = []
 def check(name: str, ok: bool, detail: str = "") -> bool:
     results.append({"check": name, "ok": bool(ok), "detail": detail})
     print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"   ({detail})" if detail else ""), flush=True)
+    if not ok and not name.startswith("a voice engine"):
+        annotate("error", "Installed app check", name + (f" -- {detail}" if detail else ""))
     return bool(ok)
+
+
+def annotate(level: str, title: str, message: str) -> None:
+    """On GitHub Actions also say it as an annotation: it is on the run's page and available from the API, which a job log is not."""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        text = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::{level} title={title}::{text}", flush=True)
 
 
 def call(base: str, path: str, body=None, method=None, headers=None, timeout=60):
@@ -238,4 +247,9 @@ def finish(out: str, proc) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:                  # a crash is named too, not only a failed check
+        import traceback
+        annotate("error", "Installed app check crashed", "".join(traceback.format_exception_only(type(e), e)).strip()[:500])
+        raise
