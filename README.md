@@ -253,6 +253,7 @@ This README links every file, so you can start here for anything.
 | [blaze/art.py](blaze/art.py) | draws characters and backdrops |
 | [blaze/voice.py](blaze/voice.py) | the voice engines (espeak-ng, system voices, Piper), a voice per character, listing and checks |
 | [blaze/pipeline.py](blaze/pipeline.py) | the whole run: check, draw, speak, compile, render, join |
+| [blaze/procs.py](blaze/procs.py) | running a program with a limit that also holds on Windows (the voice engines use it) |
 | [blaze/cli.py](blaze/cli.py) | the commands (`make`, `build`, `expand`, `voices`, `ui`, `ai`, `asset`, `doctor`, `setup`) |
 | [blaze/ui.py](blaze/ui.py), [blaze/ui_assets/index.html](blaze/ui_assets/index.html) | the page's server, and the page |
 | [blaze/ai.py](blaze/ai.py) | the optional AI writer |
@@ -279,7 +280,7 @@ This README links every file, so you can start here for anything.
 
 | File | What it is |
 |---|---|
-| [tests/test_blaze.py](tests/test_blaze.py), [tests/test_language.py](tests/test_language.py), [tests/test_voices.py](tests/test_voices.py), [tests/test_voice_engines.py](tests/test_voice_engines.py) | the language, the compiler, the pipeline, real renders, the voices |
+| [tests/test_blaze.py](tests/test_blaze.py), [tests/test_language.py](tests/test_language.py), [tests/test_voices.py](tests/test_voices.py), [tests/test_voice_engines.py](tests/test_voice_engines.py), [tests/test_procs.py](tests/test_procs.py) | the language, the compiler, the pipeline, real renders, the voices |
 | [tests/test_ui.py](tests/test_ui.py), [tests/test_ui_library_and_modes.py](tests/test_ui_library_and_modes.py), [tests/test_ai_animation.py](tests/test_ai_animation.py), [tests/test_blender.py](tests/test_blender.py), [tests/test_launcher.py](tests/test_launcher.py) | the page's server and its library panel, the AI writer, Blender, the launcher |
 | [tests/test_installer_and_workflows.py](tests/test_installer_and_workflows.py), [tests/test_workflows.py](tests/test_workflows.py), [tests/test_ci_report.py](tests/test_ci_report.py), [tests/test_architecture.py](tests/test_architecture.py), [tests/test_license.py](tests/test_license.py) | the installer, the workflow files, the CI report, the module boundaries, the licence |
 | [tests/](tests/), [studio/tests/](studio/tests/), [cdrca/tests/](cdrca/tests/) | all test folders (what each file covers: [docs/TESTING.md](docs/TESTING.md)) |

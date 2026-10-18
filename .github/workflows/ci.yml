@@ -42,6 +42,7 @@ jobs:
     env:
       QT_QPA_PLATFORM: offscreen
       BLAZE_REQUIRE_VOICE: "1"          # a missing voice engine fails the build instead of being skipped
+      PYTHONUNBUFFERED: "1"             # through `| tee` Python buffers its output: a hung run would show nothing, not even where
     defaults:
       run:
         shell: bash
@@ -66,7 +67,7 @@ jobs:
 
       - name: Python packages
         run: |
-          pip install -r requirements.txt pytest PyQt6 pyyaml pydantic requests
+          pip install -r requirements.txt pytest pytest-timeout PyQt6 pyyaml pydantic requests
           if [ "$RUNNER_OS" = "Windows" ]; then pip install pyttsx3; fi
       - name: The renderer's browser
         working-directory: cdrca
@@ -78,10 +79,13 @@ jobs:
       - name: Blaze's tests (real renders, voices, the page's server, the launcher)
         id: blaze_tests
         continue-on-error: true
-        run: python -m pytest tests -v -rs --junitxml=reports/pytest.xml 2>&1 | tee pytest_output.log
+        timeout-minutes: 25        # the whole suite takes about a minute: a stuck test must not use up the job's hour (and its log)
+        # --timeout: a test that does not finish in 5 minutes prints the stack of every thread (what it is waiting for) and stops
+        # the run, so a hang is a log with a file and a line in it instead of a job that is cancelled after an hour with nothing.
+        run: python -m pytest tests -v -rs --timeout=300 --timeout-method=thread --junitxml=reports/pytest.xml 2>&1 | tee pytest_output.log
 
       - name: Commit pytest log on failure (self-diagnosing)
-        if: steps.blaze_tests.outcome == 'failure'
+        if: steps.blaze_tests.outcome == 'failure' || steps.blaze_tests.outcome == 'cancelled'
         run: |
           # Branch per matrix.os -- this job runs ubuntu/windows/macos
           # concurrently, and a shared branch name would race (confirmed
@@ -98,7 +102,7 @@ jobs:
           git push origin "$LOG_BRANCH" --force
 
       - name: Fail the job if the tests actually failed
-        if: steps.blaze_tests.outcome == 'failure'
+        if: steps.blaze_tests.outcome == 'failure' || steps.blaze_tests.outcome == 'cancelled'
         run: exit 1
 
       - name: CDRCA's tests
@@ -121,6 +125,13 @@ jobs:
         with:
           name: report-blaze-${{ matrix.os }}
           path: reports/*.json
+      - name: The pytest log, as a download (does not depend on the push above)
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: log-blaze-${{ matrix.os }}
+          path: pytest_output.log
+          if-no-files-found: ignore
 
   studio:
     name: Desktop studio on ${{ matrix.os }}
@@ -132,6 +143,7 @@ jobs:
     timeout-minutes: 45        # a stuck job fails with its log in minutes instead of running for hours
     env:
       QT_QPA_PLATFORM: offscreen
+      PYTHONUNBUFFERED: "1"
     defaults:
       run:
         shell: bash
@@ -154,15 +166,16 @@ jobs:
       - name: ffmpeg (Windows -- VideoAssembler's tests need it here too, just not the browser)
         if: runner.os == 'Windows'
         run: choco install ffmpeg -y --no-progress
-      - run: pip install -r studio/requirements.txt transformers diffusers
+      - run: pip install -r studio/requirements.txt pytest-timeout transformers diffusers
       - name: The studio's tests (the main window, the whole offline run, providers, orchestrator)
         id: studio_tests
         continue-on-error: true
+        timeout-minutes: 20
         working-directory: studio
-        run: python -m pytest tests -v -rs --junitxml=../reports/pytest.xml 2>&1 | tee ../studio_pytest_output.log
+        run: python -m pytest tests -v -rs --timeout=300 --timeout-method=thread --junitxml=../reports/pytest.xml 2>&1 | tee ../studio_pytest_output.log
 
       - name: Commit studio pytest log on failure (self-diagnosing)
-        if: steps.studio_tests.outcome == 'failure'
+        if: steps.studio_tests.outcome == 'failure' || steps.studio_tests.outcome == 'cancelled'
         run: |
           LOG_BRANCH="ci-debug-logs-studio-${{ matrix.os }}"
           git config user.email "ci@github-actions.local"
@@ -175,7 +188,7 @@ jobs:
           git push origin "$LOG_BRANCH" --force
 
       - name: Fail the job if the studio's tests actually failed
-        if: steps.studio_tests.outcome == 'failure'
+        if: steps.studio_tests.outcome == 'failure' || steps.studio_tests.outcome == 'cancelled'
         run: exit 1
 
       - name: Test report (counts per file, every skip and its reason)
@@ -205,7 +218,7 @@ jobs:
         with:
           node-version: "22"
       - run: sudo apt-get update && sudo apt-get install -y blender ffmpeg espeak-ng
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest pytest-timeout
       - name: The renderer's browser
         working-directory: cdrca
         run: |
@@ -214,10 +227,11 @@ jobs:
       - name: Blender tests
         id: blender_tests
         continue-on-error: true
-        run: python -m pytest tests/test_blender.py -v -rs --junitxml=reports/pytest.xml 2>&1 | tee blender_pytest_output.log
+        timeout-minutes: 20
+        run: python -m pytest tests/test_blender.py -v -rs --timeout=600 --timeout-method=thread --junitxml=reports/pytest.xml 2>&1 | tee blender_pytest_output.log
 
       - name: Commit blender pytest log on failure (self-diagnosing)
-        if: steps.blender_tests.outcome == 'failure'
+        if: steps.blender_tests.outcome == 'failure' || steps.blender_tests.outcome == 'cancelled'
         run: |
           git config user.email "ci@github-actions.local"
           git config user.name "GitHub Actions CI"
@@ -229,7 +243,7 @@ jobs:
           git push origin ci-debug-logs-blender --force
 
       - name: Fail the job if the blender tests actually failed
-        if: steps.blender_tests.outcome == 'failure'
+        if: steps.blender_tests.outcome == 'failure' || steps.blender_tests.outcome == 'cancelled'
         run: exit 1
 
       - name: "Test report (no skips are accepted here, Blender is installed on purpose)"
@@ -258,6 +272,7 @@ jobs:
       BLAZE_REQUIRE_PIPER: "1"          # a missing Piper or voice model fails the build instead of being skipped
       BLAZE_REQUIRE_VOICE: "1"
       BLAZE_VOICES: ${{ github.workspace }}/piper-voices
+      PYTHONUNBUFFERED: "1"
     defaults:
       run:
         shell: bash
@@ -277,7 +292,7 @@ jobs:
         run: choco install ffmpeg -y --no-progress
       - name: Python packages (the real Piper, and the Windows system voices)
         run: |
-          pip install -r requirements.txt pytest pyyaml pydantic requests piper-tts
+          pip install -r requirements.txt pytest pytest-timeout pyyaml pydantic requests piper-tts
           if [ "$RUNNER_OS" = "Windows" ]; then pip install pyttsx3; fi
       - name: The renderer's browser
         working-directory: cdrca
@@ -301,10 +316,11 @@ jobs:
       - name: Voice tests, with the real Piper (real audio, real speed changes, a real video)
         id: piper_tests
         continue-on-error: true
-        run: python -m pytest tests/test_voices.py -v -rs --junitxml=reports/pytest.xml 2>&1 | tee piper_pytest_output.log
+        timeout-minutes: 20
+        run: python -m pytest tests/test_voices.py -v -rs --timeout=300 --timeout-method=thread --junitxml=reports/pytest.xml 2>&1 | tee piper_pytest_output.log
 
       - name: Commit piper pytest log on failure (self-diagnosing)
-        if: steps.piper_tests.outcome == 'failure'
+        if: steps.piper_tests.outcome == 'failure' || steps.piper_tests.outcome == 'cancelled'
         run: |
           LOG_BRANCH="ci-debug-logs-piper-${{ matrix.os }}"
           git config user.email "ci@github-actions.local"
@@ -317,7 +333,7 @@ jobs:
           git push origin "$LOG_BRANCH" --force
 
       - name: Fail the job if the piper tests actually failed
-        if: steps.piper_tests.outcome == 'failure'
+        if: steps.piper_tests.outcome == 'failure' || steps.piper_tests.outcome == 'cancelled'
         run: exit 1
 
       - name: Test report (counts per file, every skip and its reason)

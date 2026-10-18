@@ -1,4 +1,5 @@
 """A voice per character: engines, listing, checking, the pipeline, the page's endpoints and the CLI."""
+import functools
 import json
 import os
 import shutil
@@ -12,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from blaze import cli, ui, voice
+from blaze import cli, procs, ui, voice
 from blaze.pipeline import BlazeError, Options, create_project
 
 HAVE_ESPEAK = bool(shutil.which("espeak-ng") and shutil.which("ffmpeg"))
@@ -171,11 +172,19 @@ class TestEspeakPerCharacter:
         assert 0.5 < secs < 6 and (tmp_path / "p.wav").stat().st_size > 2000
 
 
+@functools.lru_cache(maxsize=None)
 def _pyttsx3_works() -> bool:
-    try:
-        return len(voice.Pyttsx3Voice.list_voices()) > 0 and bool(shutil.which("ffmpeg"))
-    except Exception:
+    """Asked while pytest is still collecting, so it must never be able to hang the run: a Windows SAPI engine that does not
+    answer (no audio device, a runner without voices) used to stop every test, not just these. It is asked in a separate
+    process with a time limit instead, and once."""
+    if not shutil.which("ffmpeg"):
         return False
+    code = "import pyttsx3; e = pyttsx3.init(); print(len(e.getProperty('voices') or []))"
+    try:
+        r = procs.run_bounded([sys.executable, "-c", code], 60)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0 and r.stdout.strip().isdigit() and int(r.stdout.strip()) > 0
 
 
 @pytest.mark.skipif(not _pyttsx3_works(), reason="needs pyttsx3 with at least one system voice, and ffmpeg")
@@ -218,12 +227,15 @@ class TestPyttsx3PerCharacter:
         assert voice.preview("Testing one two", spec, tmp_path / "p.wav") > 0.3
 
 
+@functools.lru_cache(maxsize=None)
 def _real_piper_model():
-    """The name of a real Piper voice model, when the real `piper` program is installed (CI installs both; see ci.yml)."""
+    """The name of a real Piper voice model, when the real `piper` program is installed (CI installs both; see ci.yml).
+    Asked while pytest is still collecting, so it is bounded (on Windows piper.exe is a launcher: subprocess.run's own timeout
+    hangs after it fires, because the child keeps the pipes open) and asked once, not once per decorator."""
     if not voice.PiperVoice.available():
         return None
     try:
-        r = subprocess.run([voice._exe("piper"), "--help"], capture_output=True, text=True, timeout=60)
+        r = procs.run_bounded([voice._exe("piper"), "--help"], 60)
     except (OSError, subprocess.SubprocessError):
         return None
     if "--model" not in (r.stdout + r.stderr):

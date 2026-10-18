@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from . import procs
+
 SAMPLE_RATE = 22050
 ENGINE_NAMES = ("espeak", "pyttsx3", "piper")
 ESPEAK_VARIANTS = ["m1", "m2", "m3", "m4", "m5", "m6", "m7", "f1", "f2", "f3", "f4", "f5", "whisper", "whisperf", "croak"]
@@ -60,9 +62,11 @@ _SYSTEM_VOICE_LOCK = threading.Lock()   # Windows SAPI / macOS NSSpeech engines 
 
 
 def _run(cmd, what: str, **kw) -> subprocess.CompletedProcess:
-    """subprocess.run with a limit: a voice engine that never returns is an error naming it, not a build that never ends."""
+    """Run a program with a limit: a voice engine that never returns is an error naming it, not a build that never ends.
+    (procs.run_bounded, not subprocess.run: on Windows the latter hangs after its own timeout when the program is a launcher
+    such as piper.exe, because the child it started keeps the output pipes open.)"""
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=ENGINE_TIMEOUT, **kw)
+        return procs.run_bounded(cmd, ENGINE_TIMEOUT, input=kw.get("input"), encoding=kw.get("encoding") or "utf-8")
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"{what} did not finish within {ENGINE_TIMEOUT} s and was stopped") from None
 
