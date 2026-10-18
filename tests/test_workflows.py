@@ -133,6 +133,19 @@ class TestReports:
     def test_the_final_report_expects_exactly_what_the_jobs_write(self):
         assert self.labels_written() == self.labels_expected()
 
+    def test_no_two_test_runs_write_their_report_to_the_same_file(self):
+        """The final job downloads every report into one folder (merge-multiple): two runs with the same file name would
+        overwrite each other, and the table would be missing one of them (the Windows and macOS runs were, for that)."""
+        written = []
+        for name in self.TEST_JOBS:
+            job = CI[name]
+            for step in run_steps(job):
+                for out in re.findall(r"ci_report\.py (?:pytest|tap) .*?--out ((?:[^\s$]|\$\{\{ matrix\.os \}\})+)", step["run"]):
+                    for osname in (systems(job) or [None]):                    # every system's run writes it, named after the system or not
+                        written.append((name, out.replace("${{ matrix.os }}", osname or "")))
+        files = [f for _, f in written]
+        assert written and len(files) == len(set(files)), sorted(f for f in files if files.count(f) > 1)
+
     def test_every_test_job_uploads_its_report_and_the_final_job_waits_for_all_of_them(self):
         for name in self.TEST_JOBS:
             uploads = [s for s in CI[name]["steps"] if str(s.get("uses", "")).startswith("actions/upload-artifact")]

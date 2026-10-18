@@ -117,8 +117,8 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           rc=0
-          python tools/ci_report.py pytest reports/pytest.xml --label "Blaze tests (${{ matrix.os }})" --out reports/blaze.json --allow-skip "${{ matrix.skips }}" 2>&1 | tee ci_report_output.txt || rc=1
-          python tools/ci_report.py tap reports/cdrca-tests.log --label "CDRCA tests (${{ matrix.os }})" --out reports/cdrca.json 2>&1 | tee -a ci_report_output.txt || rc=1
+          python tools/ci_report.py pytest reports/pytest.xml --label "Blaze tests (${{ matrix.os }})" --out reports/blaze-${{ matrix.os }}.json --allow-skip "${{ matrix.skips }}" 2>&1 | tee ci_report_output.txt || rc=1
+          python tools/ci_report.py tap reports/cdrca-tests.log --label "CDRCA tests (${{ matrix.os }})" --out reports/cdrca-${{ matrix.os }}.json 2>&1 | tee -a ci_report_output.txt || rc=1
           exit $rc
       - name: Commit the report when it rejects the run (an unexpected skip fails the job although every test passed)
         if: failure()
@@ -205,7 +205,7 @@ jobs:
 
       - name: Test report (counts per file, every skip and its reason)
         if: ${{ !cancelled() }}
-        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio.json --allow-skip "BLAZENG_GODOT_BINARY" ${{ matrix.os == 'windows-latest' && '--allow-skip "needs node.*playwright"' || '' }}
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Desktop studio tests (${{ matrix.os }})" --out reports/studio-${{ matrix.os }}.json --allow-skip "BLAZENG_GODOT_BINARY" ${{ matrix.os == 'windows-latest' && '--allow-skip "needs node.*playwright"' || '' }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -350,7 +350,7 @@ jobs:
 
       - name: Test report (counts per file, every skip and its reason)
         if: ${{ !cancelled() }}
-        run: python tools/ci_report.py pytest reports/pytest.xml --label "Piper and voice tests (${{ matrix.os }})" --out reports/piper.json --allow-skip "${{ matrix.skips }}"
+        run: python tools/ci_report.py pytest reports/pytest.xml --label "Piper and voice tests (${{ matrix.os }})" --out reports/piper-${{ matrix.os }}.json --allow-skip "${{ matrix.skips }}"
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -389,6 +389,8 @@ jobs:
     timeout-minutes: 10        # a stuck job fails with its log in minutes instead of running for hours
     steps:
       - uses: actions/checkout@v4
+      # merge-multiple puts every artifact's files in one folder: a report file name used by two legs of a matrix would be
+      # overwritten by the other, and the final table would miss a run (so each report is named after its system)
       - uses: actions/download-artifact@v4
         with:
           pattern: report-*
