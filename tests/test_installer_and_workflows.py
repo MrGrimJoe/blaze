@@ -287,3 +287,32 @@ class TestWhatGitWillAndWillNotTake:
                     "studio/ARCHITECTURE.md", "studio/CONTRIBUTING.md", "studio/LICENSE", "LICENSE", "tools/live_ai_check.py"):
             assert not (REPO / rel).exists(), rel
         assert not (REPO / "studio" / ".github").exists()
+
+
+class TestTheInstallerCheckSaysWhatIsWrong:
+    """The size check's table is only in a job log; as annotations it is on the run's page and readable by anything that looks."""
+
+    def run_check(self, tmp_path, monkeypatch, capsys, on_actions):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("check_installer_under_test", REPO / "installer" / "check_installer.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        (tmp_path / "app").mkdir()
+        (tmp_path / "app" / "blaze_app.pyw").write_text("x" * 100)
+        monkeypatch.setattr(mod, "STAGED", [("Blaze itself", "app/blaze_app.pyw", 0.0005), ("Node.js", "runtime/node/node.exe", 30)])
+        if on_actions:
+            monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        else:
+            monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+        code = mod.main(["--stage", str(tmp_path)])
+        return code, capsys.readouterr()
+
+    def test_a_missing_part_is_an_error_annotation_naming_it(self, tmp_path, monkeypatch, capsys):
+        code, out = self.run_check(tmp_path, monkeypatch, capsys, True)
+        assert code == 1
+        assert "::error title=Installer check::Node.js: missing at runtime/node/node.exe" in out.out
+        assert "::notice title=Staged part::Blaze itself:" in out.out and "::notice title=Staged part::Node.js:" in out.out
+
+    def test_off_actions_nothing_extra_is_printed(self, tmp_path, monkeypatch, capsys):
+        code, out = self.run_check(tmp_path, monkeypatch, capsys, False)
+        assert code == 1 and "::" not in out.out + out.err

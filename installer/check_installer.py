@@ -12,6 +12,7 @@ every check passes; the table it prints goes into the job log either way.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -32,6 +33,14 @@ STAGED = [
 INSTALLER_MIN_MB = 150
 
 
+def annotate(level: str, title: str, message: str) -> None:
+    """On GitHub Actions, also say it as an annotation: it is shown on the run's page and is available from the API, where a job
+    log is not (a failing size check used to be a table somewhere in a log, and nothing else)."""
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        text = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print(f"::{level} title={title}::{text}", flush=True)
+
+
 def size_of(path: Path) -> int:
     if path.is_file():
         return path.stat().st_size
@@ -48,6 +57,7 @@ def check_stage(stage: Path, items=None) -> list:
         floor_b = int(floor * MB)
         ok = n >= max(floor_b, 1)
         print(f"{what:<52}{(n / MB if n >= 0 else 0):>8.1f} MB   {floor:g} MB  {'ok' if ok else 'TOO SMALL OR MISSING'}   ({rel})")
+        annotate("notice", "Staged part", f"{what}: {n / MB if n >= 0 else 0:.1f} MB (floor {floor:g} MB) {'ok' if ok else 'TOO SMALL OR MISSING'}")
         if not ok:
             problems.append(f"{what}: {'missing' if n < 0 else f'{n / MB:.2f} MB'} at {rel}, a full build has at least {floor:g} MB")
     return problems
@@ -77,6 +87,7 @@ def main(argv=None) -> int:
         problems += check_installer(Path(a.installer), a.min_mb)
     for p in problems:
         print(f"PROBLEM: {p}", file=sys.stderr)
+        annotate("error", "Installer check", p)
     return 1 if problems else 0
 
 
