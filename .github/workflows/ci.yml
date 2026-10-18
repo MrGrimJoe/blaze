@@ -117,9 +117,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           rc=0
-          python tools/ci_report.py pytest reports/pytest.xml --label "Blaze tests (${{ matrix.os }})" --out reports/blaze.json --allow-skip "${{ matrix.skips }}" || rc=1
-          python tools/ci_report.py tap reports/cdrca-tests.log --label "CDRCA tests (${{ matrix.os }})" --out reports/cdrca.json || rc=1
+          python tools/ci_report.py pytest reports/pytest.xml --label "Blaze tests (${{ matrix.os }})" --out reports/blaze.json --allow-skip "${{ matrix.skips }}" 2>&1 | tee ci_report_output.txt || rc=1
+          python tools/ci_report.py tap reports/cdrca-tests.log --label "CDRCA tests (${{ matrix.os }})" --out reports/cdrca.json 2>&1 | tee -a ci_report_output.txt || rc=1
           exit $rc
+      - name: Commit the report when it rejects the run (an unexpected skip fails the job although every test passed)
+        if: failure()
+        run: |
+          LOG_BRANCH="ci-debug-logs-${{ matrix.os }}"
+          git config user.email "ci@github-actions.local"
+          git config user.name "GitHub Actions CI"
+          git fetch origin "$LOG_BRANCH" 2>/dev/null || true
+          git checkout -B "$LOG_BRANCH"
+          cp ci_report_output.txt "report-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.txt"
+          git add -f "report-${{ matrix.os }}-run${GITHUB_RUN_NUMBER}.txt"
+          git commit -m "CI debug report: ${{ matrix.os }}, run ${GITHUB_RUN_NUMBER}"
+          git push origin "$LOG_BRANCH" --force
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:

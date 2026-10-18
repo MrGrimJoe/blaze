@@ -10,7 +10,8 @@ def engine_or_skip(mode):
     try:
         return voice.get_voice(mode)
     except RuntimeError:
-        pytest.skip(f"{mode} is not available here")
+        # named as the program is, because ci.yml lists the skips a job accepts by these words (espeak-ng on Windows, pyttsx3 on Linux)
+        pytest.skip(f"{ {'espeak': 'espeak-ng'}.get(mode, mode) } is not available here")
 
 
 @pytest.mark.parametrize("mode", ["espeak", "pyttsx3"])
