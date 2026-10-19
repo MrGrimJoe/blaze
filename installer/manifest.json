@@ -1,0 +1,47 @@
+[
+  {
+    "file": "01-welcome.png",
+    "title": "Welcome",
+    "check": "The dark Blaze picture on the left, the welcome text mentions it works offline and that everything is included."
+  },
+  {
+    "file": "02-license.png",
+    "title": "License",
+    "check": "The license text (the Islamic Open Source License) reads as plain text with no stray marks. Next is disabled until you accept."
+  },
+  {
+    "file": "03-license-accepted.png",
+    "title": "License accepted",
+    "check": "I accept the agreement is selected and Next is enabled."
+  },
+  {
+    "file": "04-destination.png",
+    "title": "Choose where to install",
+    "check": "A folder is suggested; the disk space needed is shown. No admin prompt appeared."
+  },
+  {
+    "file": "05-tasks.png",
+    "title": "Additional tasks",
+    "check": "Create a desktop shortcut is offered."
+  },
+  {
+    "file": "06-ready.png",
+    "title": "Ready to install",
+    "check": "A summary of the choices; Install is the default button."
+  },
+  {
+    "file": "07-installing.png",
+    "title": "Installing",
+    "check": "A progress bar moves; the small Blaze picture is at the top right."
+  },
+  {
+    "file": "08-finished.png",
+    "title": "Finished",
+    "check": "Blaze is ready; Launch Blaze is ticked; the text says where videos are saved."
+  },
+  {
+    "file": "09-app-started.png",
+    "title": "After Finish: the app starts",
+    "check": "Blaze opens in your browser (a window or tab may be in front of this screen)."
+  }
+]

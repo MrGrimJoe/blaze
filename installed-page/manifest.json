@@ -1,0 +1,93 @@
+[
+  {
+    "file": "01-empty.png",
+    "title": "Fresh page",
+    "check": ""
+  },
+  {
+    "file": "02-example.png",
+    "title": "Example loaded",
+    "check": ""
+  },
+  {
+    "file": "03-error.png",
+    "title": "A mistake",
+    "check": ""
+  },
+  {
+    "file": "04-warning.png",
+    "title": "A warning",
+    "check": ""
+  },
+  {
+    "file": "05-format-help.png",
+    "title": "Format help open",
+    "check": ""
+  },
+  {
+    "file": "06-ai-choose.png",
+    "title": "Choosing an AI provider",
+    "check": ""
+  },
+  {
+    "file": "07-ai-ready.png",
+    "title": "AI ready",
+    "check": ""
+  },
+  {
+    "file": "08-making.png",
+    "title": "Making a video",
+    "check": ""
+  },
+  {
+    "file": "09-done.png",
+    "title": "Finished video",
+    "check": "",
+    "playable": true
+  },
+  {
+    "file": "10-dark.png",
+    "title": "Dark theme",
+    "check": ""
+  },
+  {
+    "file": "11-phone.png",
+    "title": "Phone width",
+    "check": ""
+  },
+  {
+    "file": "12-tablet.png",
+    "title": "Tablet width",
+    "check": ""
+  },
+  {
+    "file": "13-names.png",
+    "title": "A misspelt name or command",
+    "check": ""
+  },
+  {
+    "file": "14-voices.png",
+    "title": "A voice for each character",
+    "check": ""
+  },
+  {
+    "file": "15-looks.png",
+    "title": "Text looks and per-character speed",
+    "check": ""
+  },
+  {
+    "file": "16-library.png",
+    "title": "Your own character",
+    "check": ""
+  },
+  {
+    "file": "17-editor.png",
+    "title": "Editor mode",
+    "check": ""
+  },
+  {
+    "file": "18-running.png",
+    "title": "Running mode",
+    "check": ""
+  }
+]
