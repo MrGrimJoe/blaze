@@ -354,3 +354,37 @@ def test_the_installed_app_has_the_example_the_page_offers(tmp_path):
     assert (app / "examples" / "the-warehouse.txt").read_text(encoding="utf-8").strip(), "the staged app has the example"
     assert (REPO / "examples" / "the-warehouse.txt").read_text(encoding="utf-8").strip(), "the source has it at the same place"
     assert ui.SAMPLE.read_text(encoding="utf-8").strip()
+
+
+class TestTheNamesAndTheDownloadLinks:
+    """The README gives a fixed download link for the installer. It only works if the workflow publishes exactly that, and only
+    from a build that passed every check."""
+    TAG, ASSET = "latest-build", "Blaze_Setup.exe"
+
+    def test_the_workflows_have_their_professional_names(self):
+        assert {f: WORKFLOWS[f]["name"] for f in ("ci.yml", "screenshots.yml", "build-blaze-installer.yml")} == {
+            "ci.yml": "Blaze tests", "screenshots.yml": "Blaze screens", "build-blaze-installer.yml": "Blaze installers"}
+
+    def test_the_readme_badges_use_those_names_and_point_at_those_files(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        for name, wf in (("Blaze tests", "ci.yml"), ("Blaze installers", "build-blaze-installer.yml"), ("Blaze screens", "screenshots.yml")):
+            assert f"[![{name}](https://github.com/MrGrimJoe/blaze/actions/workflows/{wf}/badge.svg)]" in readme, name
+
+    def test_the_readmes_installer_link_is_what_the_workflow_publishes(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        assert f"https://github.com/MrGrimJoe/blaze/releases/download/{self.TAG}/{self.ASSET}" in readme
+        wf = WORKFLOWS["build-blaze-installer.yml"]["jobs"]["publish"]
+        text = " ".join(str(s.get("run", "")) for s in wf["steps"])
+        assert f"latest-build" in text and f"dist/{self.ASSET}" in text and "gh release upload latest-build" in text
+        step = next(s for s in wf["steps"] if "latest-build" in str(s.get("run", "")))
+        assert step["if"] == "github.ref == 'refs/heads/main'"                 # a tag, a branch or a pull request never moves it
+        assert set(wf["needs"]) == {"build", "verify"}                         # and only a build that was installed and used gets there
+
+    def test_the_rolling_tag_cannot_start_the_release_workflow(self):
+        tags = WORKFLOWS["build-blaze-installer.yml"][True]["push"]["tags"]
+        assert tags == ["v*"] and not self.TAG.startswith("v")
+
+    def test_the_gallery_link_is_the_branch_the_screens_workflow_publishes(self):
+        readme = (REPO / "README.md").read_text(encoding="utf-8")
+        assert "https://github.com/MrGrimJoe/blaze/blob/ci-screenshots/README.md" in readme
+        assert "ci-screenshots" in TEXTS["screenshots.yml"]

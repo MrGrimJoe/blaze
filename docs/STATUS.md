@@ -31,7 +31,7 @@ It is a snapshot (**2026-10-19**); the live answer for tests is the latest run o
 
 ## Verified on GitHub
 
-Run on GitHub Actions on 2026-10-19, commit `95af4be`: the `tests` and `Screens` workflows were green. Before the fixes of that
+Run on GitHub Actions on 2026-10-19: **Blaze tests**, **Blaze screens** and **Blaze installers** were green. Before the fixes of that
 week the Windows jobs hung until they hit their time limits (see [TESTING.md](TESTING.md#hangs)).
 
 | Area | What ran | Result |

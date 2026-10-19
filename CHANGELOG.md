@@ -2,7 +2,7 @@
 
 ## Unreleased (language, looks and voices)
 
-**CI, the voices on Windows, and the installer** (2026-10-19: the `tests` and `Screens` workflows are green)
+**CI, the voices on Windows, and the installer** (2026-10-19: the workflows are green, and now named **Blaze tests**, **Blaze screens** and **Blaze installers**)
 - Windows: the system voice (`pyttsx3`) is spoken in a process of its own (`blaze/_sapi_worker.py`, 60 s per line; on Windows it uses
   SAPI directly and synchronously). `runAndWait()` never returned on the runner and hung the `blaze` and `piper` jobs until their
   time limits.
@@ -13,6 +13,9 @@
   and a bash that really runs for the workflow syntax test on Windows. Failed checks of the installer and the page are annotations.
 - Installer: the size check no longer fails on the 269-byte launcher and says which part is wrong; the installed app has its example
   (the page read it from `tests/`, which is not shipped, so it was empty); `BLAZE_NO_BROWSER=1` starts the launcher without a browser.
+- The README has a download table. The Windows installer is at a fixed address, the "Latest build" release, which the **Blaze installers**
+  workflow edits after every build of `main` that passed all its checks (an Actions artifact cannot be linked: it needs a login and
+  expires). The screens gallery and the test results are linked too.
 - Known risks, not failing today: `ubuntu-latest` becomes Ubuntu 26 from 2026-10-19, the actions run on Node.js 20, and a tagged
   release has not been published with this code ([docs/STATUS.md](docs/STATUS.md#known-risks)).
 

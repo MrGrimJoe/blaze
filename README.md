@@ -1,8 +1,19 @@
 # Blaze
 
-[![tests](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml)
-[![installer](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml)
-[![screens](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml)
+[![Blaze tests](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml)
+[![Blaze installers](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/build-blaze-installer.yml)
+[![Blaze screens](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml/badge.svg)](https://github.com/MrGrimJoe/blaze/actions/workflows/screenshots.yml)
+
+| Download | |
+|---|---|
+| **Windows installer**, the newest build of `main` | [**Blaze_Setup.exe**](https://github.com/MrGrimJoe/blaze/releases/download/latest-build/Blaze_Setup.exe) · [about this build](https://github.com/MrGrimJoe/blaze/releases/tag/latest-build) |
+| Numbered releases | [Releases](https://github.com/MrGrimJoe/blaze/releases) |
+| Every screen of the page, the studio and the installer | [Screens gallery](https://github.com/MrGrimJoe/blaze/blob/ci-screenshots/README.md) |
+| Test results (a report on each run's summary page) | [Blaze tests](https://github.com/MrGrimJoe/blaze/actions/workflows/ci.yml) |
+
+The installer link always points at an installer that was installed on a clean Windows machine and used to make a video, because it
+is only updated when every one of those checks has passed. It is not code-signed: Windows may say "Windows protected your PC";
+choose **More info**, then **Run anyway**.
 
 **Write a story as plain text. Get an animated, voiced video.**
 
@@ -125,10 +136,11 @@ added is reported on its own line while you type. `.blend` files need [Blender](
 ## Start in three minutes
 
 **On Windows the easiest way is the installer**: run it and open **Blaze** from the Start menu. Python, Node.js, ffmpeg, the
-browser and Windows voices are all inside it, and no administrator rights are needed. It is built by GitHub Actions
-(**Actions → Build Blaze Installer → a run → Artifacts → `blaze-installer`**, or a GitHub Release for a `v*` tag). Only a build that is
-full size (about 280 MB) **and** whose installed copy then made a video on a clean machine is published under that name; a build that
-failed either check leaves only `blaze-installer-unverified`, which you should not use. Details: [docs/installer.md](docs/installer.md).
+browser and Windows voices are all inside it, and no administrator rights are needed. Download it from the table at the top
+([`Blaze_Setup.exe`](https://github.com/MrGrimJoe/blaze/releases/download/latest-build/Blaze_Setup.exe)); GitHub Actions builds it. Only a
+build that is full size (about 280 MB) **and** whose installed copy then made a video on a clean machine is put there (and is called
+`blaze-installer` among a run's artifacts); a build that failed either check leaves only `blaze-installer-unverified`, which you should
+not use. Details: [docs/installer.md](docs/installer.md).
 
 **From source** (any system) you need **Python 3.9+**, **Node.js** and **ffmpeg**. Voices need **espeak-ng** (or `pip install pyttsx3` for the system voices on Windows and macOS), or [Piper](docs/tutorials/04-voices-timing-subtitles.md) for natural offline voices; `python blaze.py voices` shows what is installed.
 
@@ -215,8 +227,8 @@ What is verified, and where, is written down in **[docs/STATUS.md](docs/STATUS.m
 
 - **Checked on Linux:** the language, the compiler, the voices (espeak-ng, `pyttsx3`, and the real Piper with a real voice model),
   the page in a browser (every screen is photographed with assertions), its three modes and your own characters (a PNG added from the page appears in a real rendered video), the installer's end-to-end check run from source, the studio's tests, and CDRCA's tests.
-- **Run on GitHub, and green (2026-10-19, commit `95af4be`):** every job of the `tests` workflow (Linux, Windows and macOS, the Windows
-  system voices, the real Piper on Linux and Windows, Blender, the studio, the documentation) and the `Screens` workflow, which builds
+- **Run on GitHub, and green (2026-10-19):** every job of **Blaze tests** (Linux, Windows and macOS, the Windows
+  system voices, the real Piper on Linux and Windows, Blender, the studio, the documentation) of **Blaze screens**, which builds
   the Windows installer at full size, installs it silently, uses the installed app to make a real video and photographs its page in
   real Chrome. A tagged release (`v*`) has not been published with this code yet.
 - **Known risks (neither is failing today):** GitHub moves the `ubuntu-latest` label to **Ubuntu 26 from 2026-10-19**, and the Linux

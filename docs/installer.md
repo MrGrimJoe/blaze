@@ -6,14 +6,20 @@ do not need administrator rights, and nothing is changed outside its folder exce
 
 ## Getting it
 
-You never build it yourself. GitHub Actions builds it:
+You never build it yourself. GitHub Actions builds it, and the newest build of `main` is always at one fixed address:
 
-1. Open the repository's **Actions** tab.
-2. Choose **Build Blaze Installer** (or **Screens**, which builds it too) and open the latest run.
-3. Under **Artifacts**, download **blaze-installer**, unzip it, and run `Blaze_Setup_<version>.exe`.
+**[github.com/MrGrimJoe/blaze/releases/download/latest-build/Blaze_Setup.exe](https://github.com/MrGrimJoe/blaze/releases/download/latest-build/Blaze_Setup.exe)**
+([about this build](https://github.com/MrGrimJoe/blaze/releases/tag/latest-build)). Anyone can download it, with no GitHub account. It is
+the "Latest build" release, one prerelease that the **Blaze installers** workflow edits in place, and only after the installer
+passed every check below (built at full size, installed, used to make a video). A build that failed leaves it as it was.
 
-To publish a release people can download without an account on the repository, push a version tag (`v0.2.0`), or run
-**Build Blaze Installer** by hand with *publish_release* ticked. A release is created with the installer attached.
+Other ways to get it:
+
+- **A numbered release.** Push a version tag (`v0.2.0`), or run **Blaze installers** by hand with *publish_release* ticked: a release
+  is created with `Blaze_Setup_<version>.exe` attached ([Releases](https://github.com/MrGrimJoe/blaze/releases)).
+- **A run's artifact.** In the **Actions** tab open a run of **Blaze installers** (or **Blaze screens**, which builds it too) and
+  download **blaze-installer** under **Artifacts**. This needs a GitHub login and expires after 30 days, which is why it cannot be a
+  link in the README.
 
 > **Windows may warn "Windows protected your PC"** the first time. The installer is not code-signed (a signing certificate
 > costs money). Choose **More info**, then **Run anyway**. Everything in it is open: see
@@ -23,7 +29,7 @@ To publish a release people can download without an account on the repository, p
 
 Welcome, the license (the Islamic Open Source License, in plain text), where to install (default: your own programs folder, so
 no admin prompt), an optional desktop shortcut, then it installs and offers to open Blaze. Screenshots of every page are produced by
-the [Screens workflow](screenshots.md).
+the [Blaze screens workflow](screenshots.md).
 
 | Where | What |
 |---|---|

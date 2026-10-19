@@ -1,13 +1,14 @@
 # Builds the Blaze Windows installer, then proves it works: installs it, runs the installed app end to end, photographs every
 # wizard page and the installed app's page, uninstalls it. Nothing is built or installed by hand.
 #
-# Get the installer: Actions -> "Build Blaze Installer" -> latest run -> Artifacts -> blaze-installer
-# (tick "publish_release" when running it by hand, or push a v* tag, to attach it to a GitHub Release).
+# Get the installer: the "Latest build" release (a fixed link, kept up to date by every verified build of main, see the README),
+# or Actions -> "Blaze installers" -> a run -> Artifacts -> blaze-installer (needs a GitHub login, and expires after 30 days).
+# Tick "publish_release" when running it by hand, or push a v* tag, to attach it to a versioned GitHub Release.
 #
 # The artifact called blaze-installer exists only when the installer was full size AND the installed app passed its
 # end-to-end check. The build uploads its result as blaze-installer-unverified, which the checks use; a run that fails
 # therefore has nothing called blaze-installer to download by mistake.
-name: Build Blaze Installer
+name: Blaze installers
 
 on:
   workflow_dispatch:
@@ -235,7 +236,11 @@ jobs:
     needs: [build, verify]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: latest-build-release          # two runs must not update the one rolling release at the same time
+      cancel-in-progress: false
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: blaze-installer-unverified
@@ -245,6 +250,32 @@ jobs:
           name: blaze-installer
           path: dist/Blaze_Setup_*.exe
           retention-days: 30
+      # The link the README gives: https://github.com/<repo>/releases/download/latest-build/Blaze_Setup.exe
+      # An Actions artifact cannot be linked from a README (it needs a GitHub login and expires); a release asset can. Only a
+      # build of main that passed every check above gets here, so this release always holds an installer that was installed
+      # and used on a clean Windows machine. It is one prerelease that is edited in place (its tag moves to the commit that
+      # was built), not a new release per push.
+      - name: Update the "Latest build" release (builds of main only)
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          cp dist/Blaze_Setup_*.exe dist/Blaze_Setup.exe
+          notes="Blaze ${VERSION}, built from commit ${GITHUB_SHA::7} of main (run ${GITHUB_RUN_NUMBER}).
+
+          This installer was installed on a clean Windows machine and used to make a video before it was put here. It is not
+          code-signed, so Windows may say \"Windows protected your PC\": choose More info, then Run anyway.
+          A numbered release (v*) is a version someone chose to publish; this one is simply the newest build of main."
+          git tag -f latest-build "$GITHUB_SHA"
+          git push -f origin latest-build
+          if gh release view latest-build >/dev/null 2>&1; then
+            gh release edit latest-build --prerelease --title "Latest build" --notes "$notes"
+          else
+            gh release create latest-build --prerelease --title "Latest build" --notes "$notes"
+          fi
+          gh release upload latest-build dist/Blaze_Setup.exe --clobber
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/v') || inputs.publish_release == true
         with:

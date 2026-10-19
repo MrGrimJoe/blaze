@@ -5,7 +5,7 @@ every screen and gathers them into one gallery.
 
 ## Get the gallery
 
-1. Open the repository's **Actions** tab, choose **Screens**, and press **Run workflow** (it also runs on every push to `main`).
+1. Open the repository's **Actions** tab, choose **Blaze screens**, and press **Run workflow** (it also runs on every push to `main`).
 2. When it finishes, open the run. Its **summary** has a link to the gallery, and the page **Artifacts** has
    **blaze-screens-gallery** (unzip it and open `README.md`).
 3. The gallery is also published on the repository's `ci-screenshots` branch: open `README.md` there to browse it with the

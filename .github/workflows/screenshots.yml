@@ -3,7 +3,7 @@
 #   * the desktop studio's windows,
 #   * the Windows installer, page by page, and the installed app's page (via the installer workflow).
 # Then builds one gallery. Open it from the run's summary, or at the ci-screenshots branch of this repository.
-name: Screens
+name: Blaze screens
 
 on:
   workflow_dispatch:
@@ -169,7 +169,7 @@ jobs:
             echo
             echo "Screens: https://github.com/${{ github.repository }}/blob/ci-screenshots/README.md"
             echo
-            echo "Tests run in the separate **tests** workflow (Windows, macOS, Linux, Blender, docs and licence)."
+            echo "Tests run in the separate **Blaze tests** workflow (Windows, macOS, Linux, Blender, docs and licence)."
             echo "If something failed, open that job: every step prints what went wrong."
           } >> "$GITHUB_STEP_SUMMARY"
           test "${{ needs.installer.result }}" = "success" -a "${{ needs.page.result }}" = "success" -a "${{ needs.studio.result }}" = "success"

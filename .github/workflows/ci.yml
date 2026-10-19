@@ -6,7 +6,7 @@
 # `test-report`, puts them in one table on the run's summary page. A skipped test is accepted only for the reasons listed next to
 # its job (`skips`), so a test that must run (a Windows voice, Piper, Blender) cannot quietly be skipped. How to read all this:
 # docs/TESTING.md.
-name: tests
+name: Blaze tests
 
 on:
   push:
