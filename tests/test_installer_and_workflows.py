@@ -336,3 +336,21 @@ def test_the_staged_app_passes_the_installers_own_size_check(tmp_path):
     rows = [r for r in check.STAGED if r[0] in ("Blaze itself", "Blaze Studio")]
     assert len(rows) == 2
     assert check.check_stage(out, rows) == []
+
+
+def test_the_installed_app_has_the_example_the_page_offers(tmp_path):
+    """The page's example comes from a file. In the installed app there is no tests/ folder (stage.py does not copy it), and the
+    example was empty there: the installed page's example button did nothing."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("stage_for_sample", REPO / "installer" / "stage.py")
+    stage = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stage)
+    out = tmp_path / "Blaze"
+    out.mkdir()
+    app = stage.stage_app(out)
+    assert not (app / "tests").exists()
+    from blaze import ui
+    assert any(c.relative_to(REPO) == Path("examples/the-warehouse.txt") for c in ui.SAMPLE_CANDIDATES)
+    assert (app / "examples" / "the-warehouse.txt").read_text(encoding="utf-8").strip(), "the staged app has the example"
+    assert (REPO / "examples" / "the-warehouse.txt").read_text(encoding="utf-8").strip(), "the source has it at the same place"
+    assert ui.SAMPLE.read_text(encoding="utf-8").strip()

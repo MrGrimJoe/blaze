@@ -31,7 +31,10 @@ from .screenplay import ScreenplayError, cast_label, parse
 from .voice import estimate_seconds
 
 ASSETS = Path(__file__).resolve().parent / "ui_assets"
-SAMPLE = REPO / "tests" / "fixtures" / "sample_story.txt"
+# The example the page offers. examples/ is in the installed app too; tests/ is not (the installer leaves it out), and with
+# only the tests' copy the installed page's "example" was empty.
+SAMPLE_CANDIDATES = (REPO / "examples" / "the-warehouse.txt", REPO / "tests" / "fixtures" / "sample_story.txt")
+SAMPLE = next((c for c in SAMPLE_CANDIDATES if c.exists()), SAMPLE_CANDIDATES[0])
 BYE_GRACE = 10          # seconds after the page says it is closing before an auto-exit app stops
 SILENT_LIMIT = 300      # seconds without any ping (a hidden tab may be throttled to one a minute)
 NEVER_OPENED_LIMIT = 300  # seconds to wait for a first page when nobody has opened it
