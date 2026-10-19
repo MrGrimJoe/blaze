@@ -56,7 +56,7 @@ A run is green only if every row is `ok`:
 - at least one test ran;
 - every expected report exists. A job that crashed before it got to testing shows as `NO REPORT`, and fails the run.
 
-The same report is uploaded as the `test-report` artifact, and each job uploads its own report (`report-*`).
+The same report is uploaded as the `test-report` artifact, and each job uploads its own report (`report-*`). Every run writes its report to a file named after its system (`blaze-windows-latest.json`, ...): the final job downloads them all into one folder, and two runs with the same file name would overwrite each other and show as missing.
 
 ## Skips
 
@@ -81,11 +81,49 @@ Three guard tests turn a missing tool into a failure on CI. They are skipped loc
 | `BLAZE_REQUIRE_BLENDER=1` | `blender` job | Blender is installed |
 | `BLAZE_REQUIRE_PIPER=1` | `piper` job | the real `piper` program and a voice model are installed |
 
+`BLAZE_NO_BROWSER=1` is not a guard: it tells the launcher not to open a browser, for scripts and tests that start the installed app.
+
 ## When a job fails
 
-The job that runs the tests continues past a failure, commits its full log to a branch named `ci-debug-logs-<job>-<system>`
-(for example `ci-debug-logs-windows-latest`, `ci-debug-logs-piper-ubuntu-latest`), and then fails. Open that branch to read the
-whole log, without downloading anything. The log holds the output of `pytest -v -rs`, so it shows every test and every skip.
+The job that runs the tests continues past a failure (or a time limit), commits its full log to a branch named
+`ci-debug-logs-<job>-<system>` (for example `ci-debug-logs-windows-latest`, `ci-debug-logs-piper-ubuntu-latest`), and then fails.
+Open that branch to read the whole log, without downloading anything. The log holds the output of `pytest -v -rs`, so it shows
+every test and every skip. Two more places:
+
+- If every test passed but the **report step** rejected the run (an unexpected skip, a missing report), the report's text is
+  committed to the same branch as `report-<system>-run<N>.txt`.
+- The `blaze` job also uploads its log as the `log-blaze-<system>` artifact, which does not depend on the push to the branch.
+
+The installer workflow and the screenshots do the same in another way: a check that fails (a part of the staged installer that is
+missing or too small, a check of the installed app, a screen of the page, a crash) is written as an **error annotation**, which is
+shown on the run's page and can be read without opening the job log.
+
+## Hangs
+
+A hung test used to use up the whole job: on Windows the `blaze` and `piper` jobs ran into their one-hour limits and were cancelled,
+and the cancelled job never reached the step that keeps its log. Now:
+
+- Every pytest step runs with `--timeout=300 --timeout-method=thread` (`pytest-timeout`): a test that does not finish in five
+  minutes prints the stack of every thread, which names the file and line it is waiting in, and stops the run. The Blender job allows
+  ten minutes per test.
+- Each test step has its own time limit (20 to 25 minutes, where the whole suite takes about a minute), and the log is committed when
+  the step was cancelled as well as when it failed. `PYTHONUNBUFFERED` is set, so the log shows progress even through `| tee`.
+- Blaze runs outside programs through `blaze/procs.py` (`run_bounded`): output goes to temporary files, not pipes, and when time runs out
+  the whole process tree is stopped. `subprocess.run(timeout=...)` does not do that on Windows for a launcher such as `piper.exe`:
+  it stops only the launcher, then waits for the pipes the child still holds.
+- The Windows system voice is spoken in a process of its own (`blaze/_sapi_worker.py`, 60 seconds per line), because `pyttsx3`'s
+  `runAndWait()` never returned on the runner and a call that never returns cannot be stopped from inside its own process.
+- Questions asked while pytest is still collecting (does `piper` run, does `pyttsx3` have a voice) are bounded and asked once, in a
+  process of their own: a hang there stopped every test, not only the ones that need the answer.
+
+## Known risks
+
+Not failing today, but what is most likely to turn a run red; the same list is in [STATUS.md](STATUS.md#known-risks).
+
+- `ubuntu-latest` becomes Ubuntu 26 from 2026-10-19: the `apt` packages and `playwright install --with-deps` of the Linux jobs may
+  need changing, or the jobs pinned to `ubuntu-24.04`.
+- The actions the workflows use run on Node.js 20, which GitHub is retiring; they are forced onto Node 24 for now and only warn.
+- A tagged release has not been published with the current code.
 
 ## What the tests are about
 
@@ -99,9 +137,10 @@ whole log, without downloading anything. The log holds the output of `pytest -v 
 | [`tests/test_ui_library_and_modes.py`](../tests/test_ui_library_and_modes.py) | the library panel's server side (add a PNG, a talking mouth, a backdrop, a `.blend` through a stand-in for Blender, refusals, removal that cannot leave the library folder, the `asset=` check) and the timeline Running mode draws |
 | [`tests/test_ai_animation.py`](../tests/test_ai_animation.py) | the AI writer, with scripted stand-ins for the providers |
 | [`tests/test_blender.py`](../tests/test_blender.py) | the Blender bridge (a stand-in everywhere, real Blender on its own job) |
-| [`tests/test_launcher.py`](../tests/test_launcher.py) | the launcher the installer's shortcut runs |
-| [`tests/test_installer_and_workflows.py`](../tests/test_installer_and_workflows.py) | the installer's staging, its Inno Setup script, and that the workflows only use files that exist |
-| [`tests/test_workflows.py`](../tests/test_workflows.py) | the workflow files: a bash script left to PowerShell on Windows, `pytest \| tee` without `pipefail`, bash syntax, report names that do not match, a Windows leg allowed to skip its voice tests |
+| [`tests/test_procs.py`](../tests/test_procs.py) | `run_bounded` always returns, and stops the child of a launcher that outlives it |
+| [`tests/test_launcher.py`](../tests/test_launcher.py) | the launcher the installer's shortcut runs, when the app stops by itself, and `BLAZE_NO_BROWSER` |
+| [`tests/test_installer_and_workflows.py`](../tests/test_installer_and_workflows.py) | the installer's staging, its Inno Setup script, that the workflows only use files that exist, that the staged app passes the installer's own size check, that the installed app has its example, and the check's annotations |
+| [`tests/test_workflows.py`](../tests/test_workflows.py) | the workflow files: a bash script left to PowerShell on Windows, `pytest \| tee` without `pipefail`, bash syntax (with a bash that really runs: on Windows `bash` is often the WSL launcher), report names that do not match, two runs writing the same report file, a Windows leg allowed to skip its voice tests |
 | [`tests/test_ci_report.py`](../tests/test_ci_report.py) | the report tool, including the skip policy |
 | [`tests/test_license.py`](../tests/test_license.py) | the licence files |
 | `studio/tests/` | the desktop studio |
@@ -121,6 +160,16 @@ Each of these happened, or was found, and has a test so it cannot come back:
 - A stand-in program written as a POSIX shell script, which Windows cannot run by name.
 - Printing a character name such as `Zoë` to a Windows console that cannot show it.
 - A demo screenplay that asks for an engine-specific voice, and so fails where that engine is not installed.
+- `pyttsx3`'s `runAndWait()` that never returns on Windows (now run in a process with a time limit), and `subprocess.run`'s own
+  timeout that hangs on Windows when the program is a launcher (`blaze/procs.py`).
+- A test that fails and makes pytest diff two whole audio files: on macOS `difflib` kept the job busy until it was cancelled. The
+  test compares sizes and checksums.
+- `bash` on a Windows runner being the WSL launcher, which fails every script with no message.
+- A skip reason that says "espeak" where the job's allow-list says "espeak-ng", and report files with the same name in every
+  matrix leg, so that all but one overwrote the others.
+- A floor of 524 bytes for a 269-byte launcher in the installer's size check, which failed the installer build on every push.
+- The page's example read from `tests/`, which the installer does not ship: in the installed app the example was empty.
+- A browser opened by a test, which pings the page for ever and so keeps the app from stopping (`BLAZE_NO_BROWSER=1`).
 
 ## Adding a test
 

@@ -39,7 +39,8 @@ the [Screens workflow](screenshots.md).
 
 Open **Blaze** from the Start menu. A browser tab opens with the page (it is served only from your own computer). **Closing
 the tab closes Blaze** after a few seconds; while a video is being made it keeps going until it is done. If Blaze is already
-open, starting it again just shows the page again.
+open, starting it again just shows the page again. (Scripts and tests that start the installed app can set `BLAZE_NO_BROWSER=1` so that
+no browser is opened: an open page pings the app every few seconds, and the app only stops once the pings stop.)
 
 Voices use Windows' own voices (through pyttsx3). If your Windows has none, videos are made without sound and the page says so.
 
@@ -71,9 +72,10 @@ Then, on a clean Windows machine in the same workflow run, it:
 A separate job runs the real installer page by page and photographs each one. The files and the script are checked for
 consistency by tests that run everywhere (`tests/test_installer_and_workflows.py`).
 
-**Status:** this workflow has not run yet. It needs Windows, which the code was written without. The first run may need a fix;
-the logs of each step say what. The staged app itself and the installed-app check were run against a staged copy of the app on
-Linux and pass.
+**Status (2026-10-19):** the build, the silent install, the installed-app check and the photograph of its page in real Chrome pass on
+GitHub's Windows runner on every push. Publishing a release (a `v*` tag) has not run with the current code. Before it compiles,
+the build checks that every part is staged at full size (Python packages, Node, ffmpeg, the browser, the app); a part that is missing
+or too small is named in an error annotation on the run's page (`installer/check_installer.py`).
 
 ## Building it on your own Windows machine
 

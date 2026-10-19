@@ -2,6 +2,20 @@
 
 ## Unreleased (language, looks and voices)
 
+**CI, the voices on Windows, and the installer** (2026-10-19: the `tests` and `Screens` workflows are green)
+- Windows: the system voice (`pyttsx3`) is spoken in a process of its own (`blaze/_sapi_worker.py`, 60 s per line; on Windows it uses
+  SAPI directly and synchronously). `runAndWait()` never returned on the runner and hung the `blaze` and `piper` jobs until their
+  time limits.
+- `blaze/procs.py`: `run_bounded` runs a program with a limit that holds on Windows too (output in temporary files, the whole
+  process tree stopped); the voice engines use it. `subprocess.run(timeout=...)` hung after its own timeout on Windows for `piper.exe`.
+- CI: a 5-minute limit per test with a stack dump of every thread, limits on every test step, unbuffered output, the log kept when a
+  step is cancelled, the `blaze` log also as an artifact, the report's text kept when it rejects a run, one report file per system,
+  and a bash that really runs for the workflow syntax test on Windows. Failed checks of the installer and the page are annotations.
+- Installer: the size check no longer fails on the 269-byte launcher and says which part is wrong; the installed app has its example
+  (the page read it from `tests/`, which is not shipped, so it was empty); `BLAZE_NO_BROWSER=1` starts the launcher without a browser.
+- Known risks, not failing today: `ubuntu-latest` becomes Ubuntu 26 from 2026-10-19, the actions run on Node.js 20, and a tagged
+  release has not been published with this code ([docs/STATUS.md](docs/STATUS.md#known-risks)).
+
 **Three modes, and your own characters in the page**
 - The page has three tabs: **Editor** (just the code, with line numbers and the error line marked), **Smart** (the page as it was) and
   **Running** (the finished video on a timeline: scenes, one row per speaker, a draggable playhead, a clickable list of lines, speed, zoom,

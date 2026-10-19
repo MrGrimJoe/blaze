@@ -100,7 +100,7 @@ Every line type, key and error is in the [screenplay reference](docs/reference/s
 
 ## See it work
 
-This is the bundled example, `tests/fixtures/sample_story.txt`, rendered by Blaze. Three scenes, three characters, voices on.
+This is the bundled example, [`examples/the-warehouse.txt`](examples/the-warehouse.txt), rendered by Blaze. Three scenes, three characters, voices on.
 
 | Scene 1: street, night rain | Scene 2: inside the warehouse | Scene 3: the beach |
 |---|---|---|
@@ -189,8 +189,10 @@ characters face the viewer. Features CDRCA itself would need first are listed as
 server, the launcher, the workflow files), the desktop studio's, CDRCA's, the real Blender, the real Piper neural voices, the
 documentation, and the Windows installer ([`ci.yml`](.github/workflows/ci.yml),
 [`build-blaze-installer.yml`](.github/workflows/build-blaze-installer.yml), [`screenshots.yml`](.github/workflows/screenshots.yml)).
-A hung job is stopped by a timeout instead of running for hours, and Blaze itself bounds every render, encode and voice call, so a stuck
-renderer is a message naming it, not a build that never ends.
+A hang cannot use up a job any more: every test has a 5-minute limit (`pytest-timeout`) that prints what every thread was doing and
+stops the run, every test step has its own limit, and Blaze itself bounds every render, encode and voice call (the system voice runs
+in a process of its own), so a stuck program is a message naming it, not a build that never ends. A failed check is also an
+annotation on the run's page, so the page says what failed without opening the log.
 
 A bare "N passed" says little, so each run ends with a **Test report** on its summary page: a row per test run, the counts per
 test file, and every skipped test with its reason. A test may only be skipped for a reason its job lists, so the Windows
@@ -213,11 +215,15 @@ What is verified, and where, is written down in **[docs/STATUS.md](docs/STATUS.m
 
 - **Checked on Linux:** the language, the compiler, the voices (espeak-ng, `pyttsx3`, and the real Piper with a real voice model),
   the page in a browser (every screen is photographed with assertions), its three modes and your own characters (a PNG added from the page appears in a real rendered video), the installer's end-to-end check run from source, the studio's tests, and CDRCA's tests.
-- **Run on GitHub, and not green yet (2026-10-15):** the installer builds at full size and installs with every file in place, but its
-  end-to-end step (make a video with the installed app) and the real-Chrome photograph of its page **fail**, so no installer is
-  published as verified. The `tests` workflow also failed on its last run after hanging for hours on Windows, which is what the new
-  timeouts are for. The Windows system (SAPI) voices, real Piper on Windows and macOS are in the same state. A failing job leaves its
-  log on a `ci-debug-logs-*` branch.
+- **Run on GitHub, and green (2026-10-19, commit `95af4be`):** every job of the `tests` workflow (Linux, Windows and macOS, the Windows
+  system voices, the real Piper on Linux and Windows, Blender, the studio, the documentation) and the `Screens` workflow, which builds
+  the Windows installer at full size, installs it silently, uses the installed app to make a real video and photographs its page in
+  real Chrome. A tagged release (`v*`) has not been published with this code yet.
+- **Known risks (neither is failing today):** GitHub moves the `ubuntu-latest` label to **Ubuntu 26 from 2026-10-19**, and the Linux
+  jobs install packages with `apt` and `playwright install --with-deps`: if a Linux job turns red after that date, look there first
+  (pinning the jobs to `ubuntu-24.04` is the fix). The actions the workflows use (`checkout`, `setup-node`, `setup-python`, `cache`,
+  `upload-artifact`, `download-artifact`) still run on **Node.js 20**, which GitHub is retiring: they are forced onto Node 24 for now
+  and only warn. Both are listed in [docs/STATUS.md](docs/STATUS.md#known-risks).
 - **Not done:** removing Blaze Studio, a JavaScript-only core, and a few things that need CDRCA to change. The reasons and the
   steps are in [docs/STATUS.md](docs/STATUS.md).
 - **Never tested live:** the AI writer and Studio's own-story mode against a real provider (they need your key); both are tested with scripted stand-ins.
